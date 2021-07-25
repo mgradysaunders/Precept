@@ -50,8 +50,6 @@
 
 #include "_hidden/_memory/HeapArenaAllocator.inl"
 
-#include "_hidden/_memory/HeapPool.inl"
-
 #include "_hidden/_memory/HeapStack.inl"
 
 #include "_hidden/_memory/RefCountable.inl"
