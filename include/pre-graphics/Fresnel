@@ -1,0 +1,79 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_FRESNEL
+#define PRE_GRAPHICS_FRESNEL
+
+#include <pre/Array>
+#include <pre/math>
+
+namespace pre {
+
+template <typename>
+struct Fresnel;
+
+template <std::floating_point Float>
+struct Fresnel<Float> {
+    Float cos_thetat = 0;
+    Float rs = 0, rp = 0;
+    Float ts = 0, tp = 0;
+    Float fr = 0;
+    Float ft = 0;
+    bool tir = false;
+
+  public:
+    Fresnel() noexcept = default;
+    Fresnel(Float eta, Float cos_thetai) noexcept {
+        Float cos2_thetat = 1 - eta * eta * (1 - cos_thetai * cos_thetai);
+        if (!(cos2_thetat > 0)) {
+            rs = rp = 1;
+            ts = tp = 0;
+            fr = 1;
+            ft = 0;
+            tir = true;
+            return;
+        }
+        cos_thetat = pre::copysign(pre::sqrt(cos2_thetat), cos_thetai);
+        rs = (eta * cos_thetai - cos_thetat) / (eta * cos_thetai + cos_thetat);
+        rp = (cos_thetai - eta * cos_thetat) / (cos_thetai + eta * cos_thetat);
+        ts = 1 + rs;
+        tp = (1 + rp) * eta;
+        fr = (rs * rs + rp * rp) / 2;
+        ft = 1 - fr;
+        cos_thetat = -cos_thetat;
+    }
+};
+
+template <concepts::arithmetic T, concepts::arithmetic U>
+Fresnel(T, U) -> Fresnel<to_floating_point_t<T, U>>;
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_FRESNEL

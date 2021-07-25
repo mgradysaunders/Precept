@@ -1,0 +1,4 @@
+build/
+docs-doxygen/
+.rake_tasks~
+*.swp

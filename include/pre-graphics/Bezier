@@ -1,0 +1,448 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_BEZIER
+#define PRE_GRAPHICS_BEZIER
+
+#include <pre-graphics/Converger>
+#include <pre-graphics/Line>
+
+namespace pre {
+
+/// A bezier curve segment.
+///
+/// \tparam Float  Float type.
+/// \tparam N      Point dimension.
+/// \tparam D      Degree.
+///
+template <std::floating_point Float, size_t N, size_t D>
+struct Bezier : ArrayLike<Bezier<Float, N, D>, Array<Float, N>> {
+    static_assert(N == 2 or N == 3);
+    static_assert(D <= 3);
+
+  public:
+    using Point = Array<Float, N>;
+
+    constexpr Bezier() noexcept = default;
+
+    template <typename... Points>
+    constexpr Bezier(const Point& p0, const Points&... pk) noexcept
+        : points{p0, pk...} {
+        static_assert(sizeof...(Points) + 1 == D + 1);
+    }
+
+    template <std::floating_point Other>
+    explicit constexpr Bezier(const Array<Other, N>* ps) noexcept {
+        std::copy(ps, ps + D + 1, begin());
+    }
+
+  public:
+    /// \name Container API
+    /** \{ */
+
+    constexpr size_t size() const noexcept {
+        return D + 1;
+    }
+
+    constexpr Point* begin() noexcept {
+        return &points[0];
+    }
+
+    constexpr const Point* begin() const noexcept {
+        return &points[0];
+    }
+
+    constexpr Point* end() noexcept {
+        return &points[0] + size();
+    }
+
+    constexpr const Point* end() const noexcept {
+        return &points[0] + size();
+    }
+
+    /** \} */
+
+  public:
+    constexpr Point operator()(Float t) const noexcept;
+
+    /// Derivative.
+    constexpr Bezier<Float, N, D - 1> deriv() const noexcept requires(D > 0) {
+        Bezier<Float, N, D - 1> bez;
+        for (size_t k = 0; k < D; k++)
+            bez.points[k] = D * (points[k + 1] - points[k]);
+        return bez;
+    }
+
+    /// Nth derivative.
+    template <size_t Which = D>
+    constexpr Bezier<Float, N, D - Which> nth_deriv() const noexcept {
+        if constexpr (Which == 0)
+            return *this;
+        else
+            return nth_deriv<Which - 1>().deriv();
+    }
+
+    /// Increase the degree of the curve.
+    [[nodiscard]] constexpr Bezier<Float, N, D + 1> increase_degree()
+            const noexcept requires(D > 0);
+
+    /// Decrease the degree of the curve.
+    [[nodiscard]] constexpr Bezier<Float, N, D - 1> decrease_degree()
+            const noexcept requires(D > 1);
+
+    /// Reverse.
+    [[nodiscard]] constexpr Bezier<Float, N, D> reverse() const noexcept {
+        Bezier<Float, N, D> bez = *this;
+        std::reverse(bez.begin(), bez.end());
+        return bez;
+    }
+
+    /// Subset on range \f$ [0, t] \f$.
+    constexpr Bezier subset(Float t) const noexcept;
+
+    /// Subset on range \f$ [t_0, t_1] \f$.
+    constexpr Bezier subset(Float t0, Float t1) const noexcept {
+        if (t1 < t0)
+            return subset(t1, t0).reverse();
+        else
+            return subset(t1).reverse().subset(1 - t0 * t1).reverse();
+    }
+
+    constexpr std::pair<Bezier, Bezier> cut(Float t) const noexcept {
+        return {subset(t), reverse().subset(1 - t).reverse()};
+    }
+
+    /// Length.
+    Float length() const noexcept;
+
+    struct Nearest {
+        Point point = {};       ///< Point
+        Point deriv = {};       ///< Deriv at point
+        Float t = 0;            ///< Param
+        Float dist2 = 0;        ///< Distance squared
+        Float signed_dist2 = 0; ///< Signed distance squared (2D only)
+    };
+
+    Nearest nearest(Point p, Float eps = 1e-6) const;
+
+  public:
+    template <std::floating_point Other>
+    constexpr operator Bezier<Other, N, D>() const noexcept {
+        return Bezier<Other, N, D>(&points[0]);
+    }
+
+  public:
+    Point points[D + 1];
+};
+
+template <typename T, size_t N, concepts::array... Args>
+Bezier(const Array<T, N>&, const Args&...)
+        -> Bezier<to_floating_point_t<T>, N, sizeof...(Args)>;
+
+template <std::floating_point Float, size_t N, size_t D>
+constexpr typename Bezier<Float, N, D>::Point Bezier<Float, N, D>::operator()(
+        Float t) const noexcept {
+    if constexpr (D == 0) {
+        return points[0];
+    }
+    else if constexpr (D == 1) {
+        return lerp(t, points[0], points[1]);
+    }
+    else if constexpr (D == 2) {
+        Float u = 1 - t;
+        Float u2 = u * u;
+        Float t2 = t * t;
+        return u2 * points[0] + (2 * u * t) * points[1] + t2 * points[2];
+    }
+    else if constexpr (D == 3) {
+        Float u = 1 - t;
+        Float u2 = u * u, u3 = u * u2;
+        Float t2 = t * t, t3 = t * t2;
+        return u3 * points[0] + (3 * u2 * t) * points[1] +
+               (3 * u * t2) * points[2] + t3 * points[3];
+    }
+    else {
+        return lerp(
+                t, //
+                Bezier<Float, N, D - 1>(&points[0])(t),
+                Bezier<Float, N, D - 1>(&points[1])(t));
+    }
+}
+
+template <std::floating_point Float, size_t N, size_t D>
+constexpr Bezier<Float, N, D + 1> Bezier<Float, N, D>::increase_degree()
+        const noexcept requires(D > 0) {
+    if constexpr (D == 1) {
+        return Bezier<Float, N, 2>{
+                points[0], Float(0.5) * (points[0] + points[1]), points[1]};
+    }
+    else {
+        Bezier<Float, N, D + 1> bez;
+        bez.points[0] = points[0];
+        bez.points[D + 1] = points[D];
+        for (size_t k = 1; k < D + 1; k++)
+            bez.points[k] = (Float(k) / Float(D + 1)) * points[k - 1] +
+                            (Float(D + 1 - k) / Float(D + 1)) * points[k];
+        return bez;
+    }
+}
+
+template <std::floating_point Float, size_t N, size_t D>
+constexpr Bezier<Float, N, D - 1> Bezier<Float, N, D>::decrease_degree()
+        const noexcept requires(D > 1) {
+    if constexpr (D == 2) {
+        return Bezier<Float, N, 1>{points[0], points[2]};
+    }
+    else {
+        // Just in case it isn't ideally reducible, average the
+        // forward and reverse formulations.
+        Bezier<Float, N, D - 1> fwd, rev;
+        fwd.points[0] = points[0];
+        rev.points[0] = points[0];
+        fwd.points[D - 1] = points[D];
+        rev.points[D - 1] = points[D];
+        for (size_t k = 1, l = D - 2; k < D - 1; k++, l--) {
+            fwd.points[k] = (Float(D) / Float(D - k)) * points[k] -
+                            (Float(k) / Float(D - k)) * fwd.points[k - 1];
+            rev.points[l] = (Float(D) / Float(l + 1)) * points[l + 1] -
+                            (Float(D) / Float(l + 1) - 1) * rev.points[l + 1];
+        }
+        for (size_t k = 1; k < D - 1; k++) {
+            fwd.points[k] *= Float(0.5);
+            fwd.points[k] += Float(0.5) * rev.points[k];
+        }
+        return fwd;
+    }
+}
+
+template <std::floating_point Float, size_t N, size_t D>
+constexpr Bezier<Float, N, D> Bezier<Float, N, D>::subset(
+        Float t) const noexcept {
+    if constexpr (D == 0) {
+        return *this;
+    }
+    else if constexpr (D == 1) {
+        return {points[0], lerp(t, points[0], points[1])};
+    }
+    else if constexpr (D == 2) {
+        Point tmp0 = lerp(t, points[0], points[1]);
+        Point tmp1 = lerp(t, points[1], points[2]);
+        return {points[0], tmp0, lerp(t, tmp0, tmp1)};
+    }
+    else {
+        Bezier bez;
+        bez.points[0] = points[0];
+        Point tmps[2 * (D + 1)];
+        Point* tmps0 = &tmps[0];
+        Point* tmps1 = &tmps[D + 1];
+        for (size_t k = 0; k < D + 1; k++)
+            tmps0[k] = points[k];
+        for (size_t j = 1; j < D + 1; j++) {
+            for (size_t k = 0; k < D + 1 - j; k++)
+                tmps1[k] = lerp(t, tmps0[k], tmps0[k + 1]);
+            bez.points[j] = tmps1[0];
+            std::swap(tmps0, tmps1);
+        }
+        return bez;
+    }
+}
+
+template <std::floating_point Float, size_t N, size_t D>
+inline Float Bezier<Float, N, D>::length() const noexcept {
+    if constexpr (std::same_as<Float, float>) {
+        return Bezier<double, N, D>(*this).length();
+    }
+    else if constexpr (D == 0) {
+        return 0;
+    }
+    else if constexpr (D == 1) {
+        return pre::length(points[1] - points[0]);
+    }
+    else if constexpr (D == 2) {
+        Point q0 = 2 * (points[0] - 2 * points[1] + points[2]);
+        Point q1 = 2 * (points[1] - points[0]);
+        Float a = dot(q0, q0), b = 2 * dot(q0, q1);
+        Float c = dot(q1, q1);
+        Float a1_2 = pre::sqrt(a);
+        Float c1_2 = pre::sqrt(c);
+        Float s1_2 = pre::sqrt(a + b + c);
+        Float len = s1_2 / 2 + b * (s1_2 - c1_2) / (4 * a);
+        if (Float d = (b * b - 4 * a * c) / (8 * a1_2 * a);
+            pre::isfinite(d) && d != 0) {
+            Float numer = b + 2 * (a + a1_2 * s1_2);
+            Float denom = b + 2 * a1_2 * c1_2;
+            Float log_term = -d * pre::log(numer / denom);
+            if (pre::isfinite(log_term))
+                len += log_term;
+        }
+        return len;
+    }
+    else {
+        StaticStack<Bezier, 16> todo;
+        todo.push(*this);
+        Float len = 0;
+        while (not todo.empty()) {
+            Bezier curr = todo.pop();
+            // Is approximately quadratic?
+            Float tmp0 = length2(curr.nth_deriv()[0]);
+            Float tmp1 = std::max(
+                    length2(curr[3] - curr[0]),
+                    length2(curr.decrease_degree().nth_deriv()[0]));
+            if (todo.size() > 14 or //
+                tmp0 <= tmp1 * Float(0.001)) {
+                len += curr.decrease_degree().length();
+            }
+            else {
+                auto [next0, next1] = curr.cut(0.5);
+                todo.push(next0);
+                todo.push(next1);
+            }
+        }
+        return len;
+    }
+}
+
+template <std::floating_point Float, size_t N, size_t D>
+inline typename Bezier<Float, N, D>::Nearest Bezier<Float, N, D>::nearest(
+        Point p, Float eps) const {
+    if constexpr (D == 0) {
+        Nearest near;
+        near.point = points[0];
+        near.deriv = {};
+        near.t = 0;
+        near.dist2 = distance2(near.point, p);
+        near.signed_dist2 = near.dist2;
+        return near;
+    }
+    else if constexpr (D == 1) {
+        // Do line calculation for degree-1.
+        auto near = Line<Float, N>(points[0], points[1]).nearest(p);
+        return {Point(near.point), deriv()(near.t), Float(near.t),
+                Float(near.dist2), Float(near.signed_dist2)};
+    }
+    else if constexpr (std::same_as<Float, float>) {
+        // Do full calculation in double precision.
+        auto near = Bezier<double, N, D>(*this).nearest(p, eps);
+        return {Point(near.point), Point(near.deriv), //
+                Float(near.t), Float(near.dist2), Float(near.signed_dist2)};
+    }
+    else {
+        /*  Find nearest point numerically using Newton-Raphson
+            iteration on the derivative of the square distance function,
+            in order to minimize it to zero. To prevent multiplicity
+            convergence issues, we actually use f=d'/d'' as the
+            objective function, which has equivalent roots to
+            d' with multiplicity 1.
+
+            Notice that the d' function has order 2*D-1 where D
+            is the curve degree (because it is the derivative of
+            the square of a degree D function). So it could have
+            2*D-1 zeroes at most. We therefore repeat the convergence
+            procedure 2*D-1 times with the starting point in a different
+            interval each time. This does not strictly guarantee that
+            we'll find the nearest point (the roots could be arbitrarily
+            close together), though we should almost always find it.
+         */
+        Nearest near;
+        near.t = -1;
+        near.dist2 = Inf<Float>;
+        near.signed_dist2 = Inf<Float>;
+        const Bezier<Float, N, D> deriv0 =
+                Bezier{points[0] - p, //
+                       points[1] - p, //
+                       points[2] - p, //
+                       points[3] - p};
+        const Bezier<Float, N, D - 1> deriv1 = deriv0.deriv();
+        const Bezier<Float, N, D - 2> deriv2 = deriv1.deriv();
+        auto f = [&](Float t) {
+            Point b0 = deriv0(t);
+            Point b1 = deriv1(t);
+            Point b2 = deriv2(t);
+            return dot(b0, b1) / (dot(b1, b1) + dot(b0, b2));
+        };
+        auto g = [&](Float t) {
+            Point b0 = deriv0(t);
+            Point b1 = deriv1(t);
+            Point b2 = deriv2(t);
+            Point b3 = {};
+            if constexpr (D == 3)
+                b3 = deriv2.deriv()(t);
+            Float numer = dot(b0, b1) * (3 * dot(b1, b2) + dot(b0, b3));
+            Float denom = dot(b1, b1) + dot(b0, b2);
+            denom *= denom;
+            return 1 - numer / denom;
+        };
+        bool success = false;
+        for (size_t seed = 0; seed <= 2 * D - 1; seed++) {
+            Float t = (seed + Float(0.5)) / Float(2 * D - 1);
+            Converger<Float> converger;
+            converger.max_iters = 20;
+            converger.lower_bound = 0;
+            converger.upper_bound = 1;
+            converger.cutoff = eps;
+            if (converger(t, f, g)) {
+                if (std::abs(t - near.t) > eps) { // New solution?
+                    Point point = operator()(t);
+                    Float dist2 = distance2(point, p);
+                    if (near.dist2 > dist2) {
+                        near.dist2 = dist2;
+                        near.point = point;
+                        near.t = t;
+                        success = true;
+                    }
+                }
+            }
+        }
+        if (not success)
+            throw std::runtime_error("Bezier::nearest() failed to converge!");
+        near.deriv = deriv1(near.t);
+        near.signed_dist2 = near.dist2;
+        if constexpr (N == 2)
+            near.signed_dist2 = std::copysign(
+                    near.dist2, cross(near.point - p, near.deriv));
+        return near;
+    }
+}
+
+template <std::floating_point Float = float>
+using QuadraticBezier2 = Bezier<Float, 2, 2>;
+
+template <std::floating_point Float = float>
+using QuadraticBezier3 = Bezier<Float, 3, 2>;
+
+template <std::floating_point Float = float>
+using CubicBezier2 = Bezier<Float, 2, 3>;
+
+template <std::floating_point Float = float>
+using CubicBezier3 = Bezier<Float, 3, 3>;
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_BEZIER

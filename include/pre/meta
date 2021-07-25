@@ -1,0 +1,138 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_META
+#define PRE_META
+
+// for std::array
+#include <array>
+
+// for std::find
+#include <algorithm>
+
+// for std::basic_istream, std::basic_ostream, ...
+#include <iosfwd>
+
+// for assert
+#include <cassert>
+
+// for std::max_align_t
+#include <cstddef>
+
+#include <cstdint>
+
+// for std::memcpy
+#include <cstring>
+
+// for std::complex
+#include <complex>
+
+// for std::semiregular, std::regular, ...
+#include <concepts>
+
+// for std::input_or_output_iterator, std::random_access_iterator, ...
+#include <iterator>
+
+// for std::ranges::range
+#include <ranges>
+
+// for std::tuple_element
+#include <utility>
+
+// for std::is_base_of_v, std::is_arithmetic_v, ...
+#include <type_traits>
+
+// for std::variant
+#include <variant>
+
+#if NDEBUG
+#define ASSERT(what) void(0)
+#else
+#define ASSERT(what) ((what) ? void(0) : [] { assert(!#what); }())
+#endif // #if NDEBUG
+
+#include "_hidden/_meta/concepts.inl"
+
+#include "_hidden/_meta/Explicit.inl"
+
+#include "_hidden/_meta/Scoped.inl"
+
+#include "_hidden/_meta/BitIterator.inl"
+
+#include "_hidden/_meta/IteratorRange.inl"
+
+#include "_hidden/_meta/ArrayLike.inl"
+
+#include "_hidden/_meta/size.inl"
+
+#include "_hidden/_meta/type_list.inl"
+
+#include "_hidden/_meta/Variant.inl"
+
+namespace pre {
+
+template <typename>
+struct to_floating_point;
+
+template <typename... T>
+using to_floating_point_t =
+        typename to_floating_point<std::common_type_t<T...>>::type;
+
+template <std::integral T>
+struct to_floating_point<T> {
+    using type = double;
+};
+
+template <std::floating_point T>
+struct to_floating_point<T> {
+    using type = T;
+};
+
+template <std::floating_point T>
+struct to_floating_point<std::complex<T>> {
+    using type = T;
+};
+
+template <typename T>
+struct to_floating_point<T&> {
+    using type = to_floating_point_t<T>; // Strip reference
+};
+
+template <std::default_initializable T>
+constexpr decltype(auto) steal(T& x) {
+    return std::exchange(x, T());
+}
+
+} // namespace pre
+
+#endif // #ifndef PRE_META

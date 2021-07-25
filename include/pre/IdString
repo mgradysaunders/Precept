@@ -1,0 +1,106 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_ID_STRING
+#define PRE_ID_STRING
+
+// for pre::Pcg32
+#include <pre/random>
+
+// for pre::StaticString
+#include <pre/memory>
+
+namespace pre {
+
+/// An ID string.
+class IdString final : public StaticString<char, 60> {
+  public:
+    constexpr IdString() noexcept = default;
+
+    constexpr IdString(const IdString&) noexcept = default;
+
+    constexpr IdString(IdString&&) noexcept = default;
+
+    template <typename... Args>
+    constexpr IdString(Args&&... args)
+        : StaticString(std::forward<Args>(args)...) {
+        rehash();
+    }
+
+    constexpr IdString& operator=(const IdString&) = default;
+
+    constexpr IdString& operator=(IdString&&) = default;
+
+    constexpr std::uint32_t hash() const noexcept {
+        return hash_;
+    }
+
+    constexpr void rehash() noexcept {
+        hash_ = Pcg32::hash(data(), size());
+    }
+
+    constexpr std::strong_ordering operator<=>(const IdString& other) const {
+        // clang-format off
+        if (hash_ < other.hash_) return std::strong_ordering::less;
+        if (hash_ > other.hash_) return std::strong_ordering::greater;
+        return view() <=> other.view();
+        // clang-format on
+    }
+
+    constexpr bool operator==(const IdString& other) const {
+        return hash_ == other.hash_ and view() == other.view();
+    }
+
+  public:
+    void serialize(auto& serializer) {
+        serializer <=> static_cast<StaticString&>(*this);
+        if (serializer.reading())
+            rehash();
+    }
+
+  private:
+    std::uint32_t hash_ = 0;
+};
+
+inline namespace literals {
+
+/// ID string literal.
+constexpr IdString operator""_id(const char* str, size_t) {
+    return IdString(str);
+}
+
+} // namespace literals
+
+} // namespace pre
+
+#endif // #ifndef PRE_ID_STRING

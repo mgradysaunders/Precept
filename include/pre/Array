@@ -1,0 +1,707 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_ARRAY
+#define PRE_ARRAY
+
+// for std:array
+#include <array>
+
+// for std::initializer_list
+#include <initializer_list>
+
+// for std::numeric_limits
+#include <limits>
+
+#include <pre/meta>
+
+namespace pre {
+
+template <typename, size_t>
+struct ArrayView;
+
+template <typename, size_t...>
+struct Array;
+
+template <typename>
+struct Array_initializers {};
+
+namespace concepts {
+
+template <typename>
+struct is_array : std::false_type {};
+
+template <typename T, size_t M, size_t... N>
+struct is_array<Array<T, M, N...>> : std::true_type {};
+
+template <typename T>
+concept array = is_array<T>::value;
+
+template <typename T>
+concept not_array = !is_array<T>::value;
+
+} // namespace concepts
+
+} // namespace pre
+
+#include "_hidden/_Array/aliases.inl"
+
+#include "_hidden/_Array/Index.inl"
+
+#include "_hidden/_Array/Lazy.inl"
+
+#include "_hidden/_Array/View.inl"
+
+#include "_hidden/_Array/Nd.inl"
+
+namespace pre {
+
+template <typename T, size_t... N>
+struct Array_value_type {
+    using type = Array<T, N...>;
+};
+
+template <typename T>
+struct Array_value_type<T> {
+    using type = T;
+};
+
+/// A static multi-dimensional array.
+template <typename Entry, size_t M, size_t... N>
+struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
+  public:
+    static_assert(M > 0);
+
+    /// \name Container typedefs
+    /** \{ */
+
+    typedef size_t size_type;
+
+    typedef std::ptrdiff_t difference_type;
+
+    typedef typename Array_value_type<Entry, N...>::type value_type;
+
+    typedef value_type& reference;
+
+    typedef value_type* pointer;
+
+    typedef const value_type& const_reference;
+
+    typedef const value_type* const_pointer;
+
+    typedef pointer iterator;
+
+    typedef const_pointer const_iterator;
+
+    typedef std::reverse_iterator<iterator> reverse_iterator;
+
+    typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+
+    /** \} */
+
+    typedef Entry entry_type;
+
+    /// Rank.
+    static constexpr size_t Rank = 1 + sizeof...(N);
+
+  public:
+    constexpr Array() noexcept = default;
+
+    constexpr Array(const Array&) noexcept = default;
+
+    constexpr Array(Array&&) noexcept = default;
+
+    explicit constexpr Array(const Entry& all) noexcept {
+        view() = all;
+    }
+
+    template <typename Other>
+    explicit constexpr Array(const Other* all) noexcept {
+        std::copy(all, all + (M * ... * N), data());
+    }
+
+    constexpr Array(std::initializer_list<Entry> list) noexcept {
+        ASSERT((M * ... * N) == list.size());
+        std::copy(list.begin(), list.end(), data());
+    }
+
+    constexpr Array(std::initializer_list<Array<Entry, N...>> list) noexcept
+            requires(Rank > 1) {
+        ASSERT(M == list.size());
+        std::copy(list.begin(), list.end(), begin());
+    }
+
+    template <typename Func>
+    constexpr Array(LazyArray<Func, Rank>&& lazy) noexcept {
+        view() = std::move(lazy);
+    }
+
+    template <std::uniform_random_bit_generator Rand, typename Pred>
+    explicit constexpr Array(Rand& rand, Pred&& pred) {
+        Entry* from = data();
+        Entry* to = data() + (M * ... * N);
+        while (from != to)
+            *from++ = std::invoke(std::forward<Pred>(pred), rand);
+    }
+
+    constexpr Array& operator=(const Array&) noexcept = default;
+
+    constexpr Array& operator=(Array&&) noexcept = default;
+
+    template <typename Func>
+    constexpr Array& operator=(LazyArray<Func, Rank>&& lazy) noexcept {
+        view() = std::move(lazy);
+        return *this;
+    }
+
+  public:
+    /// \name Container API
+    /** \{ */
+
+    static constexpr size_type rank() noexcept {
+        return Rank;
+    }
+
+    static constexpr size_type size() noexcept {
+        return M;
+    }
+
+    static constexpr ArrayIndex<Rank> sizes() noexcept {
+        return {M, N...};
+    }
+
+    constexpr iterator begin() noexcept {
+        return &values_[0];
+    }
+
+    constexpr const_iterator begin() const noexcept {
+        return &values_[0];
+    }
+
+    constexpr const_iterator cbegin() const noexcept {
+        return begin(); // Force const
+    }
+
+    constexpr iterator end() noexcept {
+        return begin() + size();
+    }
+
+    constexpr const_iterator end() const noexcept {
+        return begin() + size();
+    }
+
+    constexpr const_iterator cend() const noexcept {
+        return end(); // Force const
+    }
+
+    constexpr reverse_iterator rbegin() noexcept {
+        return reverse_iterator(end());
+    }
+
+    constexpr const_reverse_iterator rbegin() const noexcept {
+        return const_reverse_iterator(end());
+    }
+
+    constexpr const_reverse_iterator crbegin() const noexcept {
+        return rbegin(); // Force const
+    }
+
+    constexpr reverse_iterator rend() noexcept {
+        return reverse_iterator(begin());
+    }
+
+    constexpr const_reverse_iterator rend() const noexcept {
+        return const_reverse_iterator(begin());
+    }
+
+    constexpr const_reverse_iterator crend() const noexcept {
+        return rend(); // Force const
+    }
+
+    constexpr reference front() noexcept {
+        return *begin();
+    }
+
+    constexpr const_reference front() const noexcept {
+        return *begin();
+    }
+
+    constexpr reference back() noexcept {
+        return *rbegin();
+    }
+
+    constexpr const_reference back() const noexcept {
+        return *rbegin();
+    }
+
+    constexpr Entry* data() noexcept {
+        static_assert(sizeof(*this) == sizeof(Entry) * (M * ... * N));
+        return reinterpret_cast<Entry*>(this);
+    }
+
+    constexpr const Entry* data() const noexcept {
+        static_assert(sizeof(*this) == sizeof(Entry) * (M * ... * N));
+        return reinterpret_cast<const Entry*>(this);
+    }
+
+    template <std::integral Int>
+    constexpr reference operator[](Int pos) noexcept {
+        if constexpr (std::signed_integral<Int>)
+            if (pos < 0)
+                pos += M;
+        return values_[pos];
+    }
+
+    template <std::integral Int>
+    constexpr const_reference operator[](Int pos) const noexcept {
+        return const_cast<Array&>(*this)[pos];
+    }
+
+    template <std::integral Int>
+    constexpr reference at(Int pos) {
+        if constexpr (std::signed_integral<Int>)
+            if (pos < 0)
+                pos += M;
+        if (pos < 0 || pos >= Int(M))
+            throw std::out_of_range(__func__);
+        return values_[pos];
+    }
+
+    template <std::integral Int>
+    constexpr const_reference at(Int pos) const {
+        return const_cast<Array&>(*this).at(pos);
+    }
+
+    /** \} */
+
+  public:
+    /// \name Views
+    /** \{ */
+
+    constexpr ArrayView<Entry, Rank> view() noexcept {
+        return {data(), sizes()};
+    }
+
+    constexpr ArrayView<const Entry, Rank> view() const noexcept {
+        return {data(), sizes()};
+    }
+
+    constexpr ArrayView<const Entry, Rank> cview() const noexcept {
+        return view();
+    }
+
+    constexpr operator ArrayView<Entry, Rank>() noexcept {
+        return view();
+    }
+
+    constexpr operator ArrayView<const Entry, Rank>() const noexcept {
+        return cview();
+    }
+
+    constexpr ArrayView<Entry, Rank> operator*() noexcept {
+        return view();
+    }
+
+    constexpr ArrayView<const Entry, Rank> operator*() const noexcept {
+        return view();
+    }
+
+    constexpr auto operator->() noexcept {
+        struct Wrapper {
+            ArrayView<Entry, Rank> view;
+            constexpr ArrayView<Entry, Rank>* operator->() noexcept {
+                return &view;
+            }
+        };
+        return Wrapper{view()};
+    }
+
+    constexpr auto operator->() const noexcept {
+        struct Wrapper {
+            ArrayView<const Entry, Rank> view;
+            constexpr ArrayView<const Entry, Rank>* operator->() noexcept {
+                return &view;
+            }
+        };
+        return Wrapper{view()};
+    }
+
+    template <concepts::integral_or_slice P, concepts::integral_or_slice... Q>
+    constexpr decltype(auto) operator()(P p, Q&&... q) noexcept {
+        if constexpr ((std::same_as<P, Slice> || ... ||
+                       std::same_as<Q, Slice>)) {
+            return view()(p, std::forward<Q>(q)...); // View implementation
+        }
+        else {
+            if constexpr (sizeof...(Q) == 0)
+                return operator[](p);
+            else
+                return operator[](p).operator()(std::forward<Q>(q)...);
+        }
+    }
+
+    template <concepts::integral_or_slice P, concepts::integral_or_slice... Q>
+    constexpr decltype(auto) operator()(P p, Q&&... q) const noexcept {
+        if constexpr ((std::same_as<P, Slice> || ... ||
+                       std::same_as<Q, Slice>)) {
+            return view()(p, std::forward<Q>(q)...); // View implementation
+        }
+        else {
+            if constexpr (sizeof...(Q) == 0)
+                return operator[](p);
+            else
+                return operator[](p).operator()(std::forward<Q>(q)...);
+        }
+    }
+
+    /** \} */
+
+  public:
+    /// Reshape.
+    template <size_t... K>
+    constexpr Array<Entry, K...> reshape() const
+            requires((M * ... * N) == (K * ... * 1)) {
+        Array<Entry, K...> res;
+        std::copy(data(), data() + (M * ... * N), res.data());
+        return res;
+    }
+
+    /// Reshape, flatten to rank-1.
+    constexpr auto flatten() const {
+        return this->template reshape<(M * ... * N)>();
+    }
+
+    /// Implicit cast to other array.
+    template <typename Other, size_t... K>
+    constexpr operator Array<Other, K...>() const {
+        Array<Other, K...> res;
+        auto itr1 = begin();
+        auto itr2 = res.begin();
+        while (itr1 < end() && itr2 < res.end()) {
+            *itr2 = typename Array<Other, K...>::value_type(*itr1);
+            ++itr1;
+            ++itr2;
+        }
+        return res;
+    }
+
+    /// Implicit cast to standard array.
+    template <typename Other>
+    constexpr operator std::array<Other, M>() const requires(Rank == 1) {
+        std::array<Other, M> res;
+        std::copy(begin(), end(), res.begin());
+        return res;
+    }
+
+    /// Implicit cast of 1-entry arrays to entry type.
+    constexpr operator const Entry&() const requires((M * ... * N) == 1) {
+        return *data();
+    }
+
+    /// Swizzle.
+    template <std::integral Index, size_t K>
+    constexpr Array<Entry, K, N...> swizzle(
+            const Array<Index, K>& k) const noexcept {
+        Array<Entry, K, N...> res;
+        auto itrres = res.begin();
+        auto itrk = k.begin();
+        for (; itrk < k.end(); ++itrres, ++itrk)
+            *itrres = operator[](*itrk);
+        return res;
+    }
+
+    /// Swizzle.
+    template <std::integral Index, std::integral... Indexes>
+    constexpr Array<Entry, 1 + sizeof...(Indexes), N...> swizzle(
+            Index p, Indexes... q) const noexcept {
+        return swizzle(Array<Index, 1 + sizeof...(Indexes)>{p, q...});
+    }
+
+  public:
+    /// \name Folds
+    /** \{ */
+
+    template <typename F>
+    constexpr value_type foldl(F&& func) const {
+        auto itr = begin();
+        auto val = *itr++;
+        while (itr < end()) {
+            val = std::invoke(func, val, *itr++);
+        }
+        return val;
+    }
+
+    template <typename F>
+    constexpr value_type foldr(F&& func) const {
+        auto itr = rbegin();
+        auto val = *itr++;
+        while (itr < rend()) {
+            val = std::invoke(func, val, *itr++);
+        }
+        return val;
+    }
+
+    template <typename F>
+    constexpr Array& foldl_accum(F&& func) {
+        auto itr1 = begin();
+        auto itr2 = begin() + 1;
+        for (; itr2 < end(); ++itr1, ++itr2) {
+            *itr2 = std::invoke(func, *itr2, *itr1);
+        }
+        return *this;
+    }
+
+    template <typename F>
+    constexpr Array& foldr_accum(F&& func) {
+        auto itr1 = rbegin();
+        auto itr2 = rbegin() + 1;
+        for (; itr2 < rend(); ++itr1, ++itr2) {
+            *itr2 = std::invoke(func, *itr2, *itr1);
+        }
+        return *this;
+    }
+
+    template <typename F>
+    constexpr Array& foldl_adjacent(F&& func) {
+        auto itr1 = begin();
+        auto itr2 = begin() + 1;
+        for (; itr2 < end(); ++itr1, ++itr2) {
+            *itr1 = std::invoke(func, *itr1, *itr2);
+        }
+        return *this;
+    }
+
+    template <typename F>
+    constexpr Array& foldr_adjacent(F&& func) {
+        auto itr1 = rbegin();
+        auto itr2 = rbegin() + 1;
+        for (; itr2 < rend(); ++itr1, ++itr2) {
+            *itr1 = std::invoke(func, *itr1, *itr2);
+        }
+        return *this;
+    }
+
+    /// Sum.
+    ///
+    /// \note
+    /// Equivalent to `foldl(std::plus<value_type>())`.
+    ///
+    constexpr value_type sum() const {
+        return foldl(std::plus<value_type>());
+    }
+
+    /// Product.
+    ///
+    /// \note
+    /// Equivalent to `foldl(std::multiplies<value_type>())`.
+    ///
+    constexpr value_type prod() const {
+        return foldl(std::multiplies<value_type>());
+    }
+
+    /// Accumulating sum.
+    ///
+    /// \note
+    /// Equivalent to `foldl_accum(std::plus<value_type>())`.
+    ///
+    constexpr Array& accum_sum() {
+        return foldl_accum(std::plus<value_type>());
+    }
+
+    /// Adjacent difference.
+    ///
+    /// \note
+    /// Equivalent to `foldr_adjacent(std::minus<value_type>())`.
+    ///
+    constexpr Array& adjacent_difference() {
+        return foldr_adjacent(std::minus<value_type>());
+    }
+
+    /** \} */
+
+  public:
+    constexpr bool any() const noexcept {
+        for (const auto& each : *this) {
+            if constexpr (Rank > 1) {
+                if (each.any())
+                    return true;
+            }
+            else {
+                if (each)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    constexpr bool all() const noexcept {
+        for (const auto& each : *this) {
+            if constexpr (Rank > 1) {
+                if (not each.all())
+                    return false;
+            }
+            else {
+                if (not each)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    constexpr std::ptrdiff_t argmin() const noexcept requires(Rank == 1) {
+        return std::min_element(begin(), end()) - begin();
+    }
+
+    constexpr std::ptrdiff_t argmax() const noexcept requires(Rank == 1) {
+        return std::max_element(begin(), end()) - begin();
+    }
+
+    static constexpr Array identity() noexcept requires(Rank == 2) {
+        ssize_t ssizes[] = {M, N...};
+        Array arr;
+        for (ssize_t i = 0; i < ssizes[0]; i++)
+            for (ssize_t j = 0; j < ssizes[1]; j++)
+                arr(i, j) = Entry(i == j ? 1 : 0);
+        return arr;
+    }
+
+  public:
+    /// Smart alignment, to promote vectorization by the compiler.
+    static constexpr size_t alignment() noexcept {
+        size_t align = sizeof(value_type[M]);
+        if (align & (align - 1))
+            return std::alignment_of<value_type>::value;
+        if (align > std::alignment_of<std::max_align_t>::value)
+            align = std::alignment_of<std::max_align_t>::value;
+        return align;
+    }
+
+    alignas(alignment()) value_type values_[M] = {};
+
+  public:
+    void serialize(auto& serializer) {
+        for (value_type& value : *this)
+            serializer <=> value;
+    }
+
+  public:
+    template <concepts::istream Stream>
+    friend Stream& operator>>(Stream& stream, Array& arr) {
+        return stream >> *arr;
+    }
+
+    template <concepts::ostream Stream>
+    friend Stream& operator<<(Stream& stream, const Array& arr) {
+        return stream << *arr;
+    }
+};
+
+template <concepts::not_array T, concepts::not_array... U>
+Array(const T&, const U&...)
+        -> Array<std::common_type_t<T, U...>, 1 + sizeof...(U)>;
+
+template <concepts::not_array T, concepts::array... U, size_t... N>
+Array(const Array<T, N...>&, const U&...) -> Array<
+        std::common_type_t<T, typename U::entry_type...>,
+        1 + sizeof...(U),
+        N...>;
+
+template <typename T, typename U, size_t M>
+constexpr auto dot(const Array<T, M>& lhs, const Array<U, M>& rhs) noexcept {
+    return (lhs * rhs).sum();
+}
+
+template <typename T, typename U, size_t M, size_t N, size_t P>
+constexpr auto dot(
+        const Array<T, M, N>& lhs, const Array<U, N, P>& rhs) noexcept {
+    Array<decltype(T() * U()), M, P> res = {};
+    for (size_t i = 0; i < M; i++)
+        for (size_t j = 0; j < P; j++)
+            for (size_t k = 0; k < N; k++)
+                res(i, j) += lhs(i, k) * rhs(k, j);
+    return res;
+}
+
+template <typename T, typename U, size_t M, size_t N>
+constexpr auto dot(
+        const Array<T, M, N>& lhs, const Array<U, N>& rhs) noexcept {
+    return dot(lhs, rhs.template reshape<N, 1>()).template reshape<M>();
+}
+
+template <typename T, typename U, size_t N, size_t P>
+constexpr auto dot(
+        const Array<T, N>& lhs, const Array<U, N, P>& rhs) noexcept {
+    return dot(lhs.template reshape<1, N>(), rhs).template reshape<P>();
+}
+
+template <typename T, typename U, typename... Args>
+constexpr auto dot(const T& lhs, const U& rhs, const Args&... args) {
+    return dot(dot(lhs, rhs), args...);
+}
+
+template <typename T, typename U, size_t M, size_t N>
+constexpr Array<T, M, N> outer(
+        const Array<T, M>& lhs, const Array<U, N>& rhs) noexcept {
+    return dot(lhs.template reshape<M, 1>(), rhs.template reshape<1, N>());
+}
+
+template <typename T, size_t M, size_t N>
+constexpr T trace(const Array<T, M, N>& arr) noexcept {
+    T res = {};
+    for (size_t k = 0; k < std::min(M, N); k++)
+        res += arr(k, k);
+    return res;
+}
+
+template <typename T, size_t M, size_t N>
+constexpr Array<T, N, M> transpose(const Array<T, M, N>& arr) noexcept {
+    Array<T, N, M> res;
+    for (size_t i = 0; i < M; i++)
+        for (size_t j = 0; j < N; j++)
+            res(j, i) = arr(i, j);
+    return res;
+}
+
+} // namespace pre
+
+#include "_hidden/_Array/operators.inl"
+
+#ifdef PRE_MATH
+
+#include <pre/memory>
+
+#include "_hidden/_Array/math.inl"
+
+#endif // #ifdef PRE_MATH
+
+#endif // #ifndef PRE_ARRAY

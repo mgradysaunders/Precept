@@ -1,0 +1,243 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-20 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_MATH
+#define PRE_MATH
+
+// for assert
+#include <cassert>
+
+// for std::fabs, std::sqrt, ...
+#include <cmath>
+
+// for std::uint32_t, std::uint64_t, ...
+#include <cstdint>
+
+// for std::memcpy
+#include <cstring>
+
+// for std::numeric_limits
+#include <limits>
+
+#include <pre/meta>
+
+// for pre::numeric_limits
+#include "_hidden/_math/numeric_limits.inl"
+
+// for pre::numeric_constants
+#include "_hidden/_math/numeric_constants.inl"
+
+// for <cmath> wrappers
+#include "_hidden/_math/cmath.inl"
+
+namespace pre {
+
+/// Analogous to `std::real()`, except do not promote to floating point.
+template <concepts::arithmetic T>
+[[gnu::always_inline]] constexpr T real(T x) {
+    return x;
+}
+
+/// Analogous to `std::imag()`, except do not promote to floating point.
+template <concepts::arithmetic T>
+[[gnu::always_inline]] constexpr T imag(T x) {
+    (void)x;
+    return 0;
+}
+
+/// Analogous to `std::norm()`, except do not promote to floating point.
+template <concepts::arithmetic T>
+[[gnu::always_inline]] constexpr T norm(T x) {
+    return x * x;
+}
+
+/// Analogous to `std::conj()`, except do not promote to `std::complex`.
+template <concepts::arithmetic T>
+[[gnu::always_inline]] constexpr T conj(T x) {
+    return x;
+}
+
+/// Analogous to `std::real()`.
+template <typename T>
+[[gnu::always_inline]] constexpr T real(const std::complex<T>& x) {
+    return x.real();
+}
+
+/// Analgous to `std::imag()`.
+template <typename T>
+[[gnu::always_inline]] constexpr T imag(const std::complex<T>& x) {
+    return x.imag();
+}
+
+/// Analogous to `std:norm()`, except constexpr.
+template <typename T>
+[[gnu::always_inline]] constexpr T norm(const std::complex<T>& x) {
+    return x.real() * x.real() + x.imag() * x.imag();
+}
+
+/// Analogous to `std:conj()`, except constexpr.
+template <typename T>
+[[gnu::always_inline]] constexpr std::complex<T> conj(
+        const std::complex<T>& x) {
+    return std::complex<T>{+x.real(), -x.imag()};
+}
+
+/// Any Inf?
+template <typename T>
+[[gnu::always_inline]] inline bool isinf(const std::complex<T>& x) {
+    return std::isinf(x.real()) || std::isinf(x.imag());
+}
+
+/// Any NaN?
+template <typename T>
+[[gnu::always_inline]] inline bool isnan(const std::complex<T>& x) {
+    return std::isnan(x.real()) || std::isnan(x.imag());
+}
+
+/// All finite?
+template <typename T>
+[[gnu::always_inline]] inline bool isfinite(const std::complex<T>& x) {
+    return std::isfinite(x.real()) && std::isfinite(x.imag());
+}
+
+/// All normal?
+template <typename T>
+[[gnu::always_inline]] inline bool isnormal(const std::complex<T>& x) {
+    return std::isnormal(x.real()) && std::isnormal(x.imag());
+}
+
+/// Sign function.
+///
+/// \f[
+///     \operatorname{sign}(x) =
+///     \begin{cases}
+///         -1 & x < 0
+///     \\  +1 & x > 0
+///     \end{cases}
+/// \f]
+///
+/// \note
+/// Uses `std::copysign()`. Hence,
+/// - `pre::sign(-0.0) = -1.0` and
+/// - `pre::sign(+0.0) = +1.0`.
+///
+template <concepts::arithmetic T>
+[[gnu::always_inline]] inline T sign(T x) {
+    return std::copysign(T(1), x);
+}
+
+/// Step function.
+///
+/// \f[
+///     \operatorname{step}(x) =
+///     \frac{1}{2} \operatorname{sign}(x) +
+///     \frac{1}{2} =
+///     \begin{cases}
+///         0 & x < 0
+///     \\  1 & x > 0
+///     \end{cases}
+/// \f]
+///
+/// \note
+/// Uses `std::signbit()`. Hence,
+/// - `pre::step(-0.0) = 0.0` and
+/// - `pre::step(+0.0) = 1.0`.
+///
+template <concepts::arithmetic T>
+[[gnu::always_inline]] inline T step(T x) {
+    return std::signbit(x) ? T(0) : T(1);
+}
+
+/// Sign function.
+///
+/// \f[
+///     \operatorname{sign}(x) =
+///     \begin{cases}
+///         1     & x =   0
+///     \\  x/|x| & x \ne 0
+///     \end{cases}
+/// \f]
+///
+/// \note
+/// If `pre::imag(x) == 0`, computes `pre::sign(pre::real(x))` and
+/// preserves sign of `pre::imag(x)`.
+///
+template <typename T>
+[[gnu::always_inline]] inline std::complex<T> sign(const std::complex<T>& x) {
+    if (pre::imag(x) == T(0)) {
+        return {pre::sign(pre::real(x)), pre::imag(x)};
+    }
+    else {
+        return x / std::abs(x);
+    }
+}
+
+/// Step function.
+///
+/// \f[
+///     \operatorname{step}(x) =
+///     \frac{1}{2} \operatorname{sign}(x) +
+///     \frac{1}{2}
+/// \f]
+///
+/// \note
+/// If `pre::imag(x) == 0`, computes `pre::step(pre::real(x))` and
+/// preserves sign of `pre::imag(x)`.
+///
+template <typename T>
+[[gnu::always_inline]] inline std::complex<T> step(const std::complex<T>& x) {
+    if (pre::imag(x) == T(0)) {
+        return {pre::step(pre::real(x)), pre::imag(x)};
+    }
+    else {
+        return pre::sign(x) * T(0.5) + T(0.5);
+    }
+}
+
+} // namespace pre
+
+#include "_hidden/_math/cmath_extras.inl"
+
+#include "_hidden/_math/interpolation.inl"
+
+#include "_hidden/_math/color.inl"
+
+#ifdef PRE_ARRAY
+
+#include <pre/memory>
+
+#include "_hidden/_Array/math.inl"
+
+#endif // #ifdef PRE_ARRAY
+
+#endif // #ifndef PRE_MATH

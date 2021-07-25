@@ -1,0 +1,322 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_TRIANGLE
+#define PRE_GRAPHICS_TRIANGLE
+
+#include <pre-graphics/Bound>
+#include <pre-graphics/Line>
+
+namespace pre {
+
+template <std::floating_point Float, size_t Dim>
+struct Triangle : ArrayLike<Triangle<Float, Dim>, Array<Float, Dim>> {
+  public:
+    static_assert(Dim == 2 or Dim == 3);
+
+    using Vec = Array<Float, Dim>;
+
+    using Point = Array<Float, Dim>;
+
+    constexpr Triangle() noexcept = default;
+
+    constexpr Triangle(
+            const Point& p0, const Point& p1, const Point& p2) noexcept
+        : points{p0, p1, p2} {
+    }
+
+  public:
+    /// \name Container API
+    /** \{ */
+
+    constexpr size_t size() const noexcept {
+        return 3;
+    }
+
+    constexpr Point* begin() noexcept {
+        return &points[0];
+    }
+
+    constexpr const Point* begin() const noexcept {
+        return &points[0];
+    }
+
+    constexpr Point* end() noexcept {
+        return &points[0] + 3;
+    }
+
+    constexpr const Point* end() const noexcept {
+        return &points[0] + 3;
+    }
+
+    /** \} */
+
+  public:
+    constexpr Point center() const noexcept {
+        return (points[0] + points[1] + points[2]) / 3;
+    }
+
+    constexpr Line<Float, Dim> edge(int a, int b) const noexcept {
+        return {points[a], points[b]};
+    }
+
+    constexpr Vec normal() const noexcept requires(Dim == 3) {
+        return pre::cross(
+                points[1] - points[0], //
+                points[2] - points[0]);
+    }
+
+    Float area() const noexcept {
+        Vec e1 = points[1] - points[0];
+        Vec e2 = points[2] - points[0];
+        if constexpr (Dim == 2)
+            return Float(0.5) * std::abs(pre::cross(e1, e2));
+        else
+            return Float(0.5) * pre::length(pre::cross(e1, e2));
+    }
+
+    struct Nearest {
+        Point point;                     ///< Point
+        Float u = 0;                     ///< U coordinate
+        Float v = 0;                     ///< V coordinate
+        Float dist2 = Inf<Float>;        ///< Distance squared
+        Float signed_dist2 = Inf<Float>; ///< Signed distance squared
+    };
+
+    Nearest nearest(Point p) const noexcept;
+
+    struct Sample {
+        Point point;
+        Float u = 0;
+        Float v = 0;
+    };
+
+    Sample sample_uniform(Float u0, Float u1) const noexcept {
+        Float sqrt_u0 = std::sqrt(u0);
+        Float b0 = 1 - sqrt_u0, b1 = u1 * sqrt_u0;
+        Float b2 = 1 - b0 - b1;
+        Sample sample;
+        sample.point = b0 * points[0] + //
+                       b1 * points[1] + //
+                       b2 * points[2];
+        sample.u = b1;
+        sample.v = b2;
+        return sample;
+    }
+
+    template <typename Gen>
+    Sample sample_uniform(Gen& gen) const noexcept {
+        return sample_uniform(
+                generate_canonical<Float>(gen),
+                generate_canonical<Float>(gen));
+    }
+
+    constexpr Point operator()(Float u, Float v) const noexcept {
+        return (1 - u - v) * points[0] + u * points[1] + v * points[2];
+    }
+
+  public:
+    template <std::floating_point Other, size_t OtherDim>
+    constexpr operator Triangle<Other, OtherDim>() const noexcept {
+        return {Array<Other, OtherDim>(points[0]),
+                Array<Other, OtherDim>(points[1]),
+                Array<Other, OtherDim>(points[2])};
+    }
+
+  public:
+    Point points[3];
+};
+
+template <std::floating_point Float, size_t Dim>
+inline typename Triangle<Float, Dim>::Nearest Triangle<Float, Dim>::nearest(
+        Point p) const noexcept {
+    Nearest near;
+    if constexpr (Dim == 2) {
+        for (int k = 0; k < 3; k++) {
+            auto near_edge = edge(k, (k + 1) % 3).nearest(p);
+            if (near.dist2 > near_edge.dist2) {
+                near.point = near_edge.point;
+                near.u = near_edge.t;
+                near.v = 0;
+                near.dist2 = near_edge.dist2;
+                near.signed_dist2 = near_edge.signed_dist2;
+            }
+        }
+    }
+    else {
+        Vec perp = normalize(normal());
+        Vec proj = p - dot(p - points[0], perp) * perp;
+        near.point = proj;
+        near.dist2 = distance2(p, proj);
+        Float b[3];
+        for (int k = 0; k < 3; k++) {
+            int k0 = k;
+            int k1 = (k + 1) % 3;
+            int k2 = (k + 2) % 3;
+            const Array<Float, 3>& p1 = points[k1];
+            const Array<Float, 3>& p2 = points[k2];
+            b[k0] = cross(perp, p2 - p1, proj - p1);
+            if (b[k0] < 0) {
+                auto near_edge = edge(k1, k2).nearest(p);
+                b[k0] = 0;
+                b[k1] = 1 - near_edge.t;
+                b[k2] = near_edge.t;
+                near.point = near_edge.point;
+                near.dist2 = near_edge.dist2;
+                break;
+            }
+        }
+        near.u = b[1];
+        near.v = b[2];
+        near.signed_dist2 = std::copysign(near.dist2, dot(perp, p - proj));
+    }
+    return near;
+}
+
+template <std::floating_point Float = float>
+using Triangle2 = Triangle<Float, 2>;
+
+template <std::floating_point Float = float>
+using Triangle3 = Triangle<Float, 3>;
+
+template <std::floating_point Float>
+struct RayTester<Triangle<Float, 2>> {
+  public:
+    using RayT = Ray<Float, 2>;
+    using HitT = Hit<Float, 2>;
+
+    constexpr RayTester(const RayT& r) noexcept : ray(&r) {
+    }
+
+    constexpr bool operator()(
+            const Triangle<Float, 2>& triangle,
+            HitT* hit = nullptr) const noexcept {
+        // Test each line segment.
+        bool any_hit = false;
+        for (int k = 0; k < 3; k++)
+            if (ray->test(triangle.edge(k, (k + 1) % 3), hit)) {
+                any_hit = true;
+                if (not hit)
+                    break;
+            }
+        return any_hit;
+    }
+
+  public:
+    const RayT* ray = nullptr;
+};
+
+template <std::floating_point Float>
+struct RayTester<Triangle<Float, 3>> {
+  public:
+    using RayT = Ray<Float, 3>;
+    using HitT = Hit<Float, 3>;
+
+    constexpr RayTester(const RayT& r) noexcept : ray(&r) {
+        order[2] = pre::abs(ray->dir).argmax();
+        order[0] = (order[2] + 1) % 3;
+        order[1] = (order[2] + 2) % 3;
+        shear[2] = 1 / ray->dir[order[2]];
+        shear[0] = -shear[2] * ray->dir[order[0]];
+        shear[1] = -shear[2] * ray->dir[order[1]];
+    }
+
+    constexpr bool operator()(
+            const Triangle<Float, 3>& triangle,
+            HitT* hit = nullptr) const noexcept {
+        Array<float, 3> v[3];
+        v[0] = (triangle[0] - ray->org).swizzle(order);
+        v[1] = (triangle[1] - ray->org).swizzle(order);
+        v[2] = (triangle[2] - ray->org).swizzle(order);
+
+        // Shear in XY.
+        Array<float, 2> h[3];
+        for (int k = 0; k < 3; k++) {
+            h[k][0] = v[k][0] + shear[0] * v[k][2];
+            h[k][1] = v[k][1] + shear[1] * v[k][2];
+        }
+
+        // Barycentric coordinates.
+        float b[3] = {
+                h[1][1] * h[2][0] - h[1][0] * h[2][1],
+                h[2][1] * h[0][0] - h[2][0] * h[0][1],
+                h[0][1] * h[1][0] - h[0][0] * h[1][1]};
+        if (b[0] == 0.0f or b[1] == 0.0f or b[2] == 0.0f) {
+            b[0] = double(h[1][1]) * h[2][0] - double(h[1][0]) * h[2][1];
+            b[1] = double(h[2][1]) * h[0][0] - double(h[2][0]) * h[0][1];
+            b[2] = double(h[0][1]) * h[1][0] - double(h[0][0]) * h[1][1];
+        }
+        if ((b[0] < 0.0f or b[1] < 0.0f or b[2] < 0.0f) and
+            (b[0] > 0.0f or b[1] > 0.0f or b[2] > 0.0f))
+            return false;
+
+        // Determinant.
+        float q = b[0] + b[1] + b[2];
+        if (q == 0.0f)
+            return false;
+
+        // At this point, the next step is to normalize barycentric coordinates
+        // by determinant to put all in range [0, 1]. However, we only need the
+        // normalized barycentric coordinates if the intersection 1) is in the
+        // ray parameter range and 2) if info is non-null. That being the case,
+        // we defer the division.
+        float t =
+                shear[2] * (b[0] * v[0][2] + b[1] * v[1][2] + b[2] * v[2][2]);
+        float tmin = float(ray->tmin) * q;
+        float tmax = float(ray->tmax) * q;
+        if (((q > 0.0f) and not(t > tmin and t < tmax)) ||
+            ((q < 0.0f) and not(t < tmin and t > tmax)))
+            return false;
+
+        if (hit) {
+            t /= q;
+            b[0] /= q;
+            b[1] /= q;
+            b[2] /= q;
+            ray->tmax = t;
+            hit->point = b[0] * triangle[0] + //
+                         b[1] * triangle[1] + //
+                         b[2] * triangle[2];
+            hit->normal = triangle.normal();
+            hit->u = b[1];
+            hit->v = b[2];
+        }
+        return true;
+    }
+
+  public:
+    const RayT* ray = nullptr;
+    Array<float, 3> shear;
+    Array<short, 3> order;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_TRIANGLE

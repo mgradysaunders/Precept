@@ -1,0 +1,189 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_LINE
+#define PRE_GRAPHICS_LINE
+
+#include <pre-graphics/Bound>
+#include <pre-graphics/Ray>
+
+namespace pre {
+
+template <std::floating_point Float, size_t Dim>
+struct Line : ArrayLike<Line<Float, Dim>, Array<Float, Dim>> {
+  public:
+    static_assert(Dim == 2 or Dim == 3);
+
+    using Vec = Array<Float, Dim>;
+
+    using Point = Array<Float, Dim>;
+
+    constexpr Line() noexcept = default;
+
+    constexpr Line(const Point& p0, const Point& p1) noexcept
+        : points{p0, p1} {
+    }
+
+  public:
+    /// \name Container API
+    /** \{ */
+
+    constexpr size_t size() const noexcept {
+        return 2;
+    }
+
+    constexpr Point* begin() noexcept {
+        return &points[0];
+    }
+
+    constexpr const Point* begin() const noexcept {
+        return &points[0];
+    }
+
+    constexpr Point* end() noexcept {
+        return &points[0] + 2;
+    }
+
+    constexpr const Point* end() const noexcept {
+        return &points[0] + 2;
+    }
+
+    /** \} */
+
+  public:
+    constexpr Vec edge_vector() const noexcept {
+        return points[1] - points[0];
+    }
+
+    constexpr Vec edge_normal() const noexcept requires(Dim == 2) {
+        return -cross(edge_vector());
+    }
+
+    Float length() const noexcept {
+        return pre::length(edge_vector());
+    }
+
+    constexpr Point operator()(Float t) const noexcept {
+        return lerp(t, points[0], points[1]);
+    }
+
+    constexpr Line operator()(Float t0, Float t1) const noexcept {
+        return {lerp(t0, points[0], points[1]), //
+                lerp(t1, points[0], points[1])};
+    }
+
+    constexpr Float proj(Point p) const noexcept {
+        Vec u = p - points[0];
+        Vec v = points[1] - points[0];
+        return dot(u, v) / dot(v, v);
+    }
+
+    struct Nearest {
+        Point point = {};                ///< Point on line
+        Float t = 0;                     ///< Param
+        Float dist2 = Inf<Float>;        ///< Distance squared
+        Float signed_dist2 = Inf<Float>; ///< Signed distance squared (2D only)
+    };
+
+    Nearest nearest(Point p) const noexcept {
+        Nearest near;
+        auto v = edge_vector();
+        auto d = p - points[0];
+        near.t = dot(v, d) / dot(v, v);
+        near.t = std::fmax(near.t, Float(0));
+        near.t = std::fmin(near.t, Float(1));
+        near.point = operator()(near.t);
+        near.dist2 = dot(d, d);
+        near.signed_dist2 = near.dist2;
+        if constexpr (Dim == 2)
+            near.signed_dist2 = std::copysign(near.dist2, dot(-cross(v), d));
+        return near;
+    }
+
+  public:
+    template <std::floating_point Other, size_t OtherDim>
+    constexpr operator Line<Other, OtherDim>() const noexcept {
+        return {Array<Other, OtherDim>(points[0]),
+                Array<Other, OtherDim>(points[1])};
+    }
+
+    template <std::floating_point Other, size_t OtherDim>
+    constexpr operator Ray<Other, OtherDim>() const noexcept {
+        return {Array<Other, OtherDim>(points[0]),
+                Array<Other, OtherDim>(points[1] - points[0]), 0, 1};
+    }
+
+  public:
+    Point points[2];
+};
+
+template <std::floating_point Float = float>
+using Line2 = Line<Float, 2>;
+
+template <std::floating_point Float = float>
+using Line3 = Line<Float, 3>;
+
+template <std::floating_point Float>
+struct RayTester<Line<Float, 2>> {
+  public:
+    using RayT = Ray<Float, 2>;
+    using HitT = Hit<Float, 2>;
+
+    constexpr RayTester(const RayT& r) noexcept : ray(&r) {
+    }
+
+    constexpr bool operator()(
+            const Line<Float, 2>& line, HitT* hit = nullptr) const noexcept {
+        Array<Float, 2> vec = line.edge_vector();
+        Array<Float, 2> org = ray->org;
+        Array<Float, 2> dir = ray->dir;
+        org -= line[0];
+        Float t = cross(vec, org) / cross(dir, vec);
+        Float u = cross(dir, org) / cross(dir, vec);
+        if (not ray->is_in_range(t) or //
+            not(0 <= u and u < 1))
+            return false;
+        if (hit) {
+            ray->tmax = t;
+            hit->point = line(u);
+            hit->normal = line.edge_normal();
+            hit->u = u;
+            hit->v = 0;
+        }
+        return true;
+    }
+
+  public:
+    const RayT* ray = nullptr;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_LINE

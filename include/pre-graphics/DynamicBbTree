@@ -1,0 +1,193 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_DYNAMIC_BB_TREE
+#define PRE_GRAPHICS_DYNAMIC_BB_TREE
+
+#include <pre/memory>
+#include <pre-graphics/Bound>
+
+namespace pre {
+
+/// A dynamic bounding box tree.
+///
+/// \note
+/// This is based on the dynamic tree implementation in Box2D, which
+/// is in turn based on the dynamic tree implementation in Bullet3D.
+///
+template <size_t Dim>
+class DynamicBbTree {
+    static_assert(Dim == 2 or Dim == 3);
+
+  public:
+    using Box = Bound<float, Dim>;
+
+    using Int = std::int32_t;
+
+    static constexpr Int Nil = -1;
+
+    struct Node {
+        Box box;
+        union {
+            Int parent;
+            Int next;
+        };
+        Int child0 = Nil;
+        Int child1 = Nil;
+        Int height = 0;
+
+        constexpr bool is_leaf() const noexcept {
+            return child0 == Nil;
+        }
+        constexpr bool is_branch() const noexcept {
+            return child0 != Nil;
+        }
+    };
+
+    using Nodes = std::vector<Node>;
+
+  public:
+    DynamicBbTree() = default;
+
+    DynamicBbTree(const DynamicBbTree&) = default;
+
+    DynamicBbTree(DynamicBbTree&&) = default;
+
+    DynamicBbTree& operator=(const DynamicBbTree&) = default;
+
+    DynamicBbTree& operator=(DynamicBbTree&&) = default;
+
+  public:
+    Int max_height() const {
+        return root_ == Nil ? 0 : nodes_[root_].height;
+    }
+
+    Int max_imbalance() const {
+        Int imbalance = 0;
+        for (const Node& node_ref : nodes_) {
+            if (node_ref.height < 2)
+                continue;
+            const Node& child0_ref = nodes_[node_ref.child0];
+            const Node& child1_ref = nodes_[node_ref.child1];
+            imbalance = pre::max(
+                    imbalance,
+                    pre::abs(child0_ref.height - child1_ref.height));
+        }
+        return imbalance;
+    }
+
+    Int insert(const Box& box) {
+        Int node = private_allocate();
+        Node& node_ref = nodes_[node];
+        node_ref.box = box;
+        node_ref.height = 0;
+        private_insert(node);
+        return node;
+    }
+
+    void remove(Int node) {
+        private_remove(node);
+        private_deallocate(node);
+    }
+
+    void clear() noexcept {
+        nodes_.clear();
+        free_ = Nil;
+        root_ = Nil;
+    }
+
+    bool empty() const noexcept {
+        return root_ == Nil;
+    }
+
+    Node& operator[](Int node) noexcept {
+        return nodes_[node];
+    }
+
+    const Node& operator[](Int node) const noexcept {
+        return nodes_[node];
+    }
+
+  private:
+    Nodes nodes_;
+
+    Int free_ = Nil;
+
+    Int root_ = Nil;
+
+  private:
+    /// \name Private implementation
+    /** \{ */
+
+    Int private_allocate();
+
+    void private_deallocate(Int node);
+
+    void private_insert(Int node);
+
+    void private_remove(Int node);
+
+    Int private_balance(Int node);
+
+    template <bool IsDynamic, typename Func>
+    void private_traverse(const Box& box, Func&& func);
+
+    /** \} */
+};
+
+#if 0
+template <size_t Dim>
+template <bool IsDynamic, typename Func>
+inline void DynamicBbTree<Dim>::private_traverse(const Box& box, Func&& func) {
+    StaticStack<Int, 128> todo;
+    if (root_ != Nil)
+        todo.push(root_);
+    while (not todo.empty()) {
+        Int node = todo.pop();
+        Node& node_ref = nodes_[node];
+        if (node_ref.is_branch()) {
+            if (nodes_[node_ref.child0].box.overlaps(box))
+                todo.push(node_ref.child0);
+            if (nodes_[node_ref.child1].box.overlaps(box))
+                todo.push(node_ref.child1);
+        }
+        else if (not std::invoke(func, node))
+            return;
+    }
+}
+#endif
+
+using DynamicBbTree2 = DynamicBbTree<2>;
+
+using DynamicBbTree3 = DynamicBbTree<3>;
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_DYNAMIC_BB_TREE

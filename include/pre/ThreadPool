@@ -1,0 +1,288 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-20 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_THREAD_POOL
+#define PRE_THREAD_POOL
+
+// for std::chrono::milliseconds
+#include <chrono>
+
+// for std::shared_ptr
+#include <memory>
+
+// for std::vector
+#include <vector>
+
+// for std:atomic_size_t
+#include <atomic>
+
+// for std::thread
+#include <thread>
+
+// for std::future, std::packaged_task, ...
+#include <future>
+
+// for std::mutex
+#include <mutex>
+
+// for std::queue
+#include <queue>
+
+// for std::condition_variable
+#include <condition_variable>
+
+// for std::function
+#include <functional>
+
+namespace pre {
+
+/// A thread pool.
+///
+/// This an RAII-style structure, meaning it launches a bunch of thread
+/// objects immediately upon construction. The number of threads may be
+/// specified manually by passing an integer to the constructor. If not
+/// specified (or if a non-positive integer is passed), the implementation
+/// defaults to `std::thread::hardware_concurrency()`. After construction,
+/// client code can dispatch work to the thread pool by using the member
+/// function `submit()`, which accepts a function object (and, optionally,
+/// arguments to pass to the function object), then enqueues the work to
+/// done by a worker thread, then immediately returns a standard future
+/// object to eventually access the return value.
+///
+/// \note
+/// The `submit()` function makes no guarantees about which work is
+/// assigned to which thread, or in what specific order any submitted
+/// work is completed.
+///
+class ThreadPool {
+  public:
+    /// Constructor.
+    ///
+    /// \param[in] n
+    ///  Number of threads. If less than 1, uses
+    /// `std::thread::hardware_concurrency()`.
+    ///
+    ThreadPool(int n = 0) {
+        if (n < 1) {
+            n = std::thread::hardware_concurrency();
+            if (n == 0)
+                n = 4; // Just to be safe.
+        }
+        threads_.reserve(n);
+        while (n-- > 0)
+            threads_.emplace_back(Worker(*this));
+    }
+
+    ThreadPool(const ThreadPool&) = delete;
+
+    ~ThreadPool() {
+        shutdown();
+    }
+
+  public:
+    /// Submit task.
+    ///
+    /// \returns
+    /// `std::future<decltype(std::forward<Func>(func)(std::forward<Args>(args)...))>`.
+    ///
+    template <typename Func, typename... Args>
+    inline auto submit(Func&& func, Args&&... args) {
+        auto bind = std::bind(
+                std::forward<Func>(func), //
+                std::forward<Args>(args)...);
+        auto bind_ptr =
+                std::make_shared<std::packaged_task<decltype(bind())()>>(bind);
+        queue_.push([bind_ptr]() { (*bind_ptr)(); });
+        cv_.notify_one();
+        return bind_ptr->get_future();
+    }
+
+    /// Wait until all tasks complete.
+    void wait_all() {
+        queue_.wait_all();
+    }
+
+    /// Shutdown pool.
+    void shutdown() {
+        if (shutdown_ == false) {
+            shutdown_ = true;
+            cv_.notify_all();
+            for (std::thread& thread : threads_) {
+                if (thread.joinable()) {
+                    thread.join();
+                }
+            }
+        }
+    }
+
+  private:
+    using TaskFunc = std::function<void()>;
+
+    /// A thread-safe task queue.
+    class TaskQueue {
+      public:
+        TaskQueue() = default;
+
+        TaskQueue(const TaskQueue&) = delete;
+
+      public:
+        bool empty() {
+            std::unique_lock<std::mutex> lock(mutex_);
+            return queue_.empty();
+        }
+
+        size_t size() {
+            std::unique_lock<std::mutex> lock(mutex_);
+            return queue_.size();
+        }
+
+        void push(const TaskFunc& task) {
+            std::unique_lock<std::mutex> lock(mutex_);
+            queue_.push(task);
+            incomplete_count_++;
+        }
+
+        /// Pop task.
+        ///
+        /// \returns
+        /// Returns true if successful, false if empty.
+        ///
+        bool pop(TaskFunc& task) {
+            std::unique_lock<std::mutex> lock(mutex_);
+            if (queue_.empty()) {
+                return false;
+            }
+            else {
+                task = std::move(queue_.front());
+                queue_.pop();
+                return true;
+            }
+        }
+
+        /// Pop task is complete.
+        ///
+        /// This decrements the task count, then notifies the task count
+        /// conditional variable, in case `wait_all()` is spinning on the
+        /// main thread.
+        ///
+        void pop_complete() {
+            incomplete_count_--;
+            cv_.notify_all();
+        }
+
+        /// Wait until all tasks complete.
+        ///
+        /// \note
+        /// _All tasks complete_ is a stronger condition than _task queue
+        /// empty_, because each task still takes additional time to complete
+        /// after a worker removes it from the queue.
+        ///
+        void wait_all() {
+            std::unique_lock<std::mutex> lock(mutex_);
+            while (1) {
+                cv_.wait(lock);
+                if (!incomplete_count_.load())
+                    return;
+            }
+        }
+
+      private:
+        std::queue<TaskFunc> queue_;
+
+        std::mutex mutex_;
+
+        std::condition_variable cv_;
+
+        /// Incomplete count.
+        ///
+        /// \note
+        /// This is the number of incomplete tasks, meaning the
+        /// number of tasks in the queue plus the number of tasks currently
+        /// executing on worker threads.
+        ///
+        std::atomic_size_t incomplete_count_ = {};
+    };
+
+    /// A worker.
+    class Worker {
+      public:
+        /// Constructor.
+        ///
+        /// \param[in] pool
+        /// Thread pool managing this worker.
+        ///
+        Worker(ThreadPool& pool) : pool_(pool) {
+        }
+
+      public:
+        /// Invoke worker loop.
+        void operator()() {
+            TaskFunc task;
+            while (!pool_.shutdown_) {
+                bool pop_okay = false;
+                {
+                    std::unique_lock<std::mutex> lock(pool_.mutex_);
+                    if (pool_.queue_.empty()) {
+                        pool_.cv_.wait_for(
+                                lock,
+                                std::chrono::milliseconds(
+                                        50)); // Avoid hanging.
+                    }
+                    pop_okay = pool_.queue_.pop(task);
+                }
+                if (pop_okay) {
+                    task();
+                    pool_.queue_.pop_complete();
+                }
+            }
+        }
+
+      private:
+        ThreadPool& pool_;
+    };
+
+  private:
+    std::vector<std::thread> threads_;
+
+    bool shutdown_ = false;
+
+    TaskQueue queue_;
+
+    std::mutex mutex_;
+
+    std::condition_variable cv_;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_THREAD_POOL

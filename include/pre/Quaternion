@@ -1,0 +1,624 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_QUATERNION
+#define PRE_QUATERNION
+
+#include <pre/Array>
+#include <pre/Dual>
+
+namespace pre {
+
+/// A basic quaternion container.
+template <typename Entry>
+struct BasicQuaternion : ArrayLike<BasicQuaternion<Entry>, Entry> {
+  public:
+    constexpr BasicQuaternion() noexcept = default;
+
+    constexpr BasicQuaternion(
+            const Entry& s, const Array<Entry, 3>& v = {}) noexcept
+        : arr_{s, v[0], v[1], v[2]} {
+    }
+
+    constexpr BasicQuaternion(
+            const Entry& s,
+            const Entry& v0,
+            const Entry& v1,
+            const Entry& v2) noexcept
+        : arr_{s, v0, v1, v2} {
+    }
+
+    constexpr BasicQuaternion(const Array<Entry, 4>& arr) noexcept
+        : arr_(arr) {
+    }
+
+  public:
+    /// \name Container API
+    /** \{ */
+
+    constexpr size_t size() const noexcept {
+        return 4;
+    }
+
+    constexpr Entry* begin() noexcept {
+        return &arr_[0];
+    }
+
+    constexpr const Entry* begin() const noexcept {
+        return &arr_[0];
+    }
+
+    constexpr Entry* end() noexcept {
+        return &arr_[0] + 4;
+    }
+
+    constexpr const Entry* end() const noexcept {
+        return &arr_[0] + 4;
+    }
+
+    /** \} */
+
+  public:
+    constexpr Entry real() const noexcept {
+        return arr_[0];
+    }
+
+    constexpr Entry real(Entry s) noexcept {
+        return std::exchange(arr_[0], s);
+    }
+
+    constexpr Array<Entry, 3> imag() const noexcept {
+        return {arr_[1], arr_[2], arr_[3]};
+    }
+
+    constexpr Array<Entry, 3> imag(Array<Entry, 3> v) noexcept {
+        return {std::exchange(arr_[1], v[0]), std::exchange(arr_[2], v[1]),
+                std::exchange(arr_[3], v[2])};
+    }
+
+    constexpr BasicQuaternion conj() const noexcept {
+        return {+arr_[0], -arr_[1], -arr_[2], -arr_[3]};
+    }
+
+    constexpr Entry norm() const noexcept {
+        return dot(arr_, arr_);
+    }
+
+    constexpr BasicQuaternion inverse() const noexcept {
+        Entry tmp = 1 / norm();
+        return {+arr_[0] * tmp, -arr_[1] * tmp, -arr_[2] * tmp,
+                -arr_[3] * tmp};
+    }
+
+  public:
+    constexpr explicit operator Array<Entry, 4>&() noexcept {
+        return arr_;
+    }
+
+    constexpr explicit operator const Array<Entry, 4>&() const noexcept {
+        return arr_;
+    }
+
+  public:
+    void serialize(auto& serializer) {
+        serializer <=> arr_;
+    }
+
+  protected:
+    Array<Entry, 4> arr_;
+};
+
+template <typename>
+class Quaternion;
+
+/// A quaternion.
+template <std::floating_point Float>
+class Quaternion<Float> final : public BasicQuaternion<Float> {
+  public:
+    using Base = BasicQuaternion<Float>;
+    using Base::Base;
+
+    constexpr Quaternion(const Base& base) noexcept : Base(base) {
+    }
+
+    explicit Quaternion(const Array<Float, 3, 3>& mat) noexcept {
+        this->arr_[0] = trace(mat);
+        if (this->arr_[0] > 0) {
+            this->arr_[0] += 1;
+            this->arr_[1] = -mat[1][2] + mat[2][1];
+            this->arr_[2] = -mat[2][0] + mat[0][2];
+            this->arr_[3] = -mat[0][1] + mat[1][0];
+            this->arr_ *= Float(0.5) / pre::sqrt(this->arr_[0]);
+        }
+        else {
+            int i = 0;
+            if (mat[1][1] > mat[i][i])
+                i = 1;
+            if (mat[2][2] > mat[i][i])
+                i = 2;
+            int j = (i + 1) % 3;
+            int k = (j + 1) % 3;
+            this->arr_[0] = mat[j][k] - mat[k][j];
+            this->arr_[1 + i] = -mat[i][i] + mat[j][j] + mat[k][k] - 1;
+            this->arr_[1 + j] = -mat[i][j] - mat[j][i];
+            this->arr_[1 + k] = -mat[k][i] - mat[i][k];
+            this->arr_ *= Float(0.5) / pre::sqrt(-this->arr_[1 + i]);
+        }
+    }
+
+  public:
+    constexpr Quaternion conj() const noexcept {
+        return static_cast<const Base&>(*this).conj();
+    }
+
+    constexpr Quaternion inverse() const noexcept {
+        return static_cast<const Base&>(*this).inverse();
+    }
+
+    Float length() const noexcept {
+        return pre::sqrt(this->norm());
+    }
+
+    [[nodiscard]] Quaternion normalize() const noexcept {
+        return this->arr_ / this->length();
+    }
+
+    Float rotation_angle() const noexcept {
+        return 2 * pre::atan2(pre::length(this->imag()), this->real());
+    }
+
+    Array<Float, 3> rotation_axis() const noexcept {
+        Array<Float, 3> hatv = pre::normalize(this->imag());
+        if (hatv[0] == 0 && hatv[1] == 0)
+            hatv[2] = 1;
+        return hatv;
+    }
+
+  public:
+    /// Explicit cast as other floatintg point type.
+    template <std::floating_point Other>
+    constexpr explicit operator Quaternion<Other>() const noexcept {
+        return {static_cast<Other>(this->arr_[0]),
+                static_cast<Other>(this->arr_[1]),
+                static_cast<Other>(this->arr_[2]),
+                static_cast<Other>(this->arr_[3])};
+    }
+
+    /// Explicit cast as rotation matrix.
+    constexpr explicit operator Array<Float, 3, 3>() const noexcept {
+        Float w = this->arr_[0];
+        Float x = this->arr_[1];
+        Float y = this->arr_[2];
+        Float z = this->arr_[3];
+        Float w2 = w * w, wx = w * x, wy = w * y, wz = w * z;
+        Float x2 = x * x, xy = x * y, xz = x * z;
+        Float y2 = y * y, yz = y * z;
+        Float z2 = z * z;
+        return {{(w2 + x2) - (y2 + z2), 2 * (xy - wz), 2 * (xz + wy)},
+                {2 * (xy + wz), (w2 - x2) + (y2 - z2), 2 * (yz - wx)},
+                {2 * (xz - wy), 2 * (yz + wx), (w2 - x2) - (y2 - z2)}};
+    }
+
+    /// Apply transform to vector.
+    constexpr Array<Float, 3> operator()(
+            const Array<Float, 3>& u) const noexcept {
+        Float s = this->real();
+        Array<Float, 3> v = this->imag();
+        Array<Float, 3> w = cross(v, u);
+        return (s * s) * u + (2 * s) * w + (cross(v, w) + v * dot(v, u));
+    }
+
+  public:
+    static constexpr Quaternion identity() noexcept {
+        return {Float(1)};
+    }
+
+    /// Rotate counter-clockwise around arbitrary axis.
+    ///
+    /// \param[in] theta  Angle in radians.
+    /// \param[in] hatv   Normalized rotation axis.
+    ///
+    static Quaternion rotate(Float theta, Array<Float, 3> hatv) noexcept {
+        return {pre::cos(Float(0.5) * theta),
+                pre::sin(Float(0.5) * theta) * hatv};
+    }
+
+    /// Rotate counter-clockwise around X-axis.
+    static Quaternion rotatex(Float theta) noexcept {
+        return rotate(theta, {1, 0, 0});
+    }
+
+    /// Rotate counter-clockwise around Y-axis.
+    static Quaternion rotatey(Float theta) noexcept {
+        return rotate(theta, {0, 1, 0});
+    }
+
+    /// Rotate counter-clockwise around Z-axis.
+    static Quaternion rotatez(Float theta) noexcept {
+        return rotate(theta, {0, 0, 1});
+    }
+
+    /// Spherical linear interpolation.
+    ///
+    /// \param[in] mu       Factor \f$ \mu \in [0, 1] \f$.
+    /// \param[in] q0       Versor \f$ q_0 \f$ for \f$ \mu = 0 \f$.
+    /// \param[in] q1       Versor \f$ q_1 \f$ for \f$ \mu = 1 \f$.
+    /// \param[out] dq_dmu  Derivative \f$ dq/d\mu \f$. _Optional_.
+    ///
+    static Quaternion slerp(
+            Float mu,
+            const Quaternion& q0,
+            const Quaternion& q1,
+            Quaternion* dq_dmu = nullptr) noexcept {
+        Float cos_theta = clamp(dot(q0, q1), Float(-1), Float(+1));
+        if (!(cos_theta < Float(0.9999))) {
+            Quaternion q = lerp(mu, q0, q1);
+            Float inv_len2 = Float(1) / q.norm();
+            Float inv_len1 = pre::sqrt(inv_len2);
+            q *= inv_len1;
+            if (dq_dmu)
+                *dq_dmu = inv_len1 * (q1 - q0) +
+                          inv_len2 * (1 - 2 * mu) * (1 - cos_theta) * q;
+            return q;
+        }
+        else {
+            Float theta = pre::acos(cos_theta);
+            Float sin_mutheta = pre::sin(mu * theta);
+            Float cos_mutheta = pre::cos(mu * theta);
+            Quaternion qp = (q1 - cos_theta * q0).normalize();
+            Quaternion q = cos_mutheta * q0 + sin_mutheta * qp;
+            if (dq_dmu)
+                *dq_dmu = (theta * cos_mutheta) * qp -
+                          (theta * sin_mutheta) * q0;
+            return q;
+        }
+    }
+};
+
+/// A dual quaternion.
+template <std::floating_point Float>
+class Quaternion<Dual<Float>> final : public BasicQuaternion<Dual<Float>> {
+  public:
+    using Base = BasicQuaternion<Dual<Float>>;
+    using Base::Base;
+
+    constexpr Quaternion(const Base& base) noexcept : Base(base) {
+    }
+
+    constexpr Quaternion(
+            const Quaternion<Float>& a, const Quaternion<Float>& b) noexcept
+        : Base(Dual(a[0], b[0]),
+               Dual(a[1], b[1]),
+               Dual(a[2], b[2]),
+               Dual(a[3], b[3])) {
+    }
+
+  public:
+    constexpr Quaternion<Float> quat_real() const noexcept {
+        return {this->arr_[0].real(), this->arr_[1].real(),
+                this->arr_[2].real(), this->arr_[3].real()};
+    }
+
+    constexpr Quaternion<Float> quat_real(
+            const Quaternion<Float>& a) noexcept {
+        return {this->arr_[0].real(a[0]), this->arr_[1].real(a[1]),
+                this->arr_[2].real(a[2]), this->arr_[3].real(a[3])};
+    }
+
+    constexpr Quaternion<Float> quat_dual() const noexcept {
+        return {this->arr_[0].dual(), this->arr_[1].dual(),
+                this->arr_[2].dual(), this->arr_[3].dual()};
+    }
+
+    constexpr Quaternion<Float> quat_dual(
+            const Quaternion<Float>& b) noexcept {
+        return {this->arr_[0].dual(b[0]), this->arr_[1].dual(b[1]),
+                this->arr_[2].dual(b[2]), this->arr_[3].dual(b[3])};
+    }
+
+  public:
+    constexpr Quaternion conj() const noexcept {
+        return static_cast<const Base&>(*this).conj();
+    }
+
+    constexpr Quaternion inverse() const noexcept {
+        return static_cast<const Base&>(*this).inverse();
+    }
+
+    constexpr Quaternion dual_conj() const noexcept {
+        return {this->arr_[0].dual_conj(), this->arr_[1].dual_conj(),
+                this->arr_[2].dual_conj(), this->arr_[3].dual_conj()};
+    }
+
+    Float rotation_angle() const noexcept {
+        return quat_real().rotation_angle();
+    }
+
+    Array<Float, 3> rotation_axis() const noexcept {
+        return quat_real().rotation_axis();
+    }
+
+    constexpr Array<Float, 3> translation() const noexcept {
+        return 2 * (quat_dual() * quat_real().conj()).imag();
+    }
+
+  public:
+    /// Explicit cast as other floating point type.
+    template <std::floating_point Other>
+    constexpr explicit operator Quaternion<Dual<Other>>() const noexcept {
+        return {static_cast<Dual<Other>>(this->arr_[0]),
+                static_cast<Dual<Other>>(this->arr_[1]),
+                static_cast<Dual<Other>>(this->arr_[2]),
+                static_cast<Dual<Other>>(this->arr_[3])};
+    }
+
+    /// Explicit cast as affine transform matrix.
+    constexpr explicit operator Array<Float, 4, 4>() const noexcept {
+        Array<Float, 4, 4> res = Array<Float, 3, 3>(quat_real());
+        Array<Float, 3> tmp = translation();
+        res[0][3] = tmp[0];
+        res[1][3] = tmp[1];
+        res[2][3] = tmp[2];
+        res[3][3] = 1;
+        return res;
+    }
+
+    /// Apply transform to point.
+    constexpr Array<Float, 3> operator()(
+            const Array<Float, 3>& u) const noexcept {
+        return quat_real()(u) + translation();
+    }
+
+  public:
+    static constexpr Quaternion identity() noexcept {
+        return {Dual<Float>(1, 0)};
+    }
+
+    /// Rotate counter-clockwise around arbitrary axis.
+    ///
+    /// \param[in] theta
+    /// Angle in radians.
+    ///
+    /// \param[in] hatv
+    /// Normalized rotation axis.
+    ///
+    static Quaternion rotate(Float theta, Array<Float, 3> hatv) noexcept {
+        return {Quaternion<Float>::rotate(theta, hatv), Quaternion<Float>()};
+    }
+
+    /// Rotate counter-clockwise around X-axis.
+    static Quaternion rotatex(Float theta) noexcept {
+        return {Quaternion<Float>::rotatex(theta), Quaternion<Float>()};
+    }
+
+    /// Rotate counter-clockwise around Y-axis.
+    static Quaternion rotatey(Float theta) noexcept {
+        return {Quaternion<Float>::rotatey(theta), Quaternion<Float>()};
+    }
+
+    /// Rotate counter-clockwise around Z-axis.
+    static Quaternion rotatez(Float theta) noexcept {
+        return {Quaternion<Float>::rotatez(theta), Quaternion<Float>()};
+    }
+
+    /// Translate.
+    static Quaternion translate(const Array<Float, 3>& w) noexcept {
+        return {Dual<Float>(1, 0), //
+                Dual<Float>(0, w[0] * Float(0.5)),
+                Dual<Float>(0, w[1] * Float(0.5)),
+                Dual<Float>(0, w[2] * Float(0.5))};
+    }
+
+    /// Spherical linear interpolation.
+    ///
+    /// \param[in] mu       Factor \f$ \mu \in [0, 1] \f$.
+    /// \param[in] x0       Dual quaternion \f$ x_0 \f$ for \f$ \mu = 0 \f$.
+    /// \param[in] x1       Dual quaternion \f$ x_1 \f$ for \f$ \mu = 1 \f$.
+    /// \param[out] dx_dmu  Derivative \f$ dx/d\mu \f$. _Optional_.
+    ///
+    static Quaternion slerp(
+            Float mu,
+            const Quaternion& x0,
+            const Quaternion& x1,
+            Quaternion* dx_dmu = nullptr) noexcept {
+        Quaternion<Float> a0 = x0.quat_real(), a1 = x1.quat_real(), da_dmu;
+        Quaternion<Float> b0 = x0.quat_dual(), b1 = x1.quat_dual();
+        Quaternion<Float> a = Quaternion<Float>::slerp(
+                mu, a0, a1, dx_dmu ? &da_dmu : nullptr);
+        if (dx_dmu)
+            *dx_dmu = {da_dmu, b1 - b0};
+        return {a, lerp(mu, b0, b1)};
+    }
+};
+
+template <typename T, typename U>
+Quaternion(const T&, const Array<U, 3>&)
+        -> Quaternion<std::common_type_t<T, U>>;
+
+template <typename T, concepts::not_array... Ts>
+Quaternion(const T&, const Ts&...) -> Quaternion<std::common_type_t<T, Ts...>>;
+
+template <typename T>
+Quaternion(const Array<T, 4>&) -> Quaternion<T>;
+
+template <typename T>
+Quaternion(const Array<T, 3, 3>&) -> Quaternion<T>;
+
+template <typename T, typename U>
+Quaternion(const Quaternion<T>&, const Quaternion<U>&)
+        -> Quaternion<Dual<std::common_type_t<T, U>>>;
+
+template <typename T, typename U>
+constexpr auto dot(const Quaternion<T>& q0, const Quaternion<U>& q1) {
+    return dot(
+            static_cast<const Array<T, 4>&>(q0),
+            static_cast<const Array<T, 4>&>(q1));
+}
+
+template <typename T>
+constexpr Quaternion<T> operator+(const Quaternion<T>& q) {
+    return +static_cast<const Array<T, 4>&>(q);
+}
+
+template <typename T>
+constexpr Quaternion<T> operator-(const Quaternion<T>& q) {
+    return -static_cast<const Array<T, 4>&>(q);
+}
+
+template <typename T, typename U>
+constexpr auto operator+(const Quaternion<T>& q0, const Quaternion<U>& q1) {
+    return Quaternion(
+            static_cast<const Array<T, 4>&>(q0) +
+            static_cast<const Array<U, 4>&>(q1));
+}
+
+template <typename T, typename U>
+constexpr auto operator-(const Quaternion<T>& q0, const Quaternion<U>& q1) {
+    return Quaternion(
+            static_cast<const Array<T, 4>&>(q0) -
+            static_cast<const Array<U, 4>&>(q1));
+}
+
+template <typename T, typename U>
+constexpr auto operator*(const Quaternion<T>& q0, const Quaternion<U>& q1) {
+    return Quaternion{
+            q0.real() * q1.real() - dot(q0.imag(), q1.imag()),
+            q0.real() * q1.imag() + q0.imag() * q1.real() +
+                    cross(q0.imag(), q1.imag())};
+}
+
+template <typename T, typename U>
+constexpr auto operator/(const Quaternion<T>& q0, const Quaternion<U>& q1) {
+    return q0 * q1.inverse();
+}
+
+template <typename T, concepts::not_matches<Quaternion> U>
+constexpr auto operator+(const Quaternion<T>& q0, const U& s1) {
+    return Quaternion{q0.real() + s1, q0.imag()};
+}
+
+template <typename T, concepts::not_matches<Quaternion> U>
+constexpr auto operator-(const Quaternion<T>& q0, const U& s1) {
+    return Quaternion{q0.real() - s1, q0.imag()};
+}
+
+template <typename T, concepts::not_matches<Quaternion> U>
+constexpr auto operator*(const Quaternion<T>& q0, const U& s1) {
+    return Quaternion(static_cast<const Array<T, 4>&>(q0) * s1);
+}
+
+template <typename T, concepts::not_matches<Quaternion> U>
+constexpr auto operator/(const Quaternion<T>& q0, const U& s1) {
+    return Quaternion(static_cast<const Array<T, 4>&>(q0) / s1);
+}
+
+template <concepts::not_matches<Quaternion> T, typename U>
+constexpr auto operator+(const T& s0, const Quaternion<U>& q1) {
+    return Quaternion{s0 + q1.real(), q1.imag()};
+}
+
+template <concepts::not_matches<Quaternion> T, typename U>
+constexpr auto operator-(const T& s0, const Quaternion<U>& q1) {
+    return Quaternion{s0 - q1.real(), -q1.imag()};
+}
+
+template <concepts::not_matches<Quaternion> T, typename U>
+constexpr auto operator*(const T& s0, const Quaternion<U>& q1) {
+    return Quaternion(s0 * static_cast<const Array<U, 4>&>(q1));
+}
+
+template <concepts::not_matches<Quaternion> T, typename U>
+constexpr auto operator/(const T& s0, const Quaternion<U>& q1) {
+    return s0 * q1.inverse();
+}
+
+template <typename T, typename Any>
+constexpr Quaternion<T>& operator+=(Quaternion<T>& q, const Any& any) {
+    return q = q + any;
+}
+
+template <typename T, typename Any>
+constexpr Quaternion<T>& operator-=(Quaternion<T>& q, const Any& any) {
+    return q = q - any;
+}
+
+template <typename T, typename Any>
+constexpr Quaternion<T>& operator*=(Quaternion<T>& q, const Any& any) {
+    return q = q * any;
+}
+
+template <typename T, typename Any>
+constexpr Quaternion<T>& operator/=(Quaternion<T>& q, const Any& any) {
+    return q = q / any;
+}
+
+template <typename T, typename U>
+constexpr bool operator==(const Quaternion<T>& q0, const Quaternion<U>& q1) {
+    return (static_cast<const Array<T, 4>&>(q0) ==
+            static_cast<const Array<U, 4>&>(q1))
+            .all();
+}
+
+template <typename T, typename U>
+constexpr bool operator!=(const Quaternion<T>& q0, const Quaternion<U>& q1) {
+    return (static_cast<const Array<T, 4>&>(q0) !=
+            static_cast<const Array<U, 4>&>(q1))
+            .any();
+}
+
+template <typename T>
+inline bool isinf(const Quaternion<T>& q) {
+    return pre::isinf(static_cast<const Array<T, 4>&>(q)).any();
+}
+
+template <typename T>
+inline bool isnan(const Quaternion<T>& q) {
+    return pre::isnan(static_cast<const Array<T, 4>&>(q)).any();
+}
+
+template <typename T>
+inline bool isfinite(const Quaternion<T>& q) {
+    return pre::isfinite(static_cast<const Array<T, 4>&>(q)).all();
+}
+
+template <typename T>
+inline bool isnormal(const Quaternion<T>& q) {
+    return pre::isnormal(static_cast<const Array<T, 4>&>(q)).all();
+}
+
+template <std::floating_point T>
+using DualQuaternion = Quaternion<Dual<T>>;
+
+} // namespace pre
+
+#endif // #ifndef PRE_QUATERNION

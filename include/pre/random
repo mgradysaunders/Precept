@@ -1,0 +1,367 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-20 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_RANDOM
+#define PRE_RANDOM
+
+#include <cstdint>
+#include <cstring>
+#include <pre/math>
+
+namespace pre {
+
+/// Generate canonical random value in \f$ [0, 1) \f$.
+template <std::floating_point T, typename G>
+inline T generate_canonical(G&& gen) {
+    long double r = static_cast<long double>(gen.max()) -
+                    static_cast<long double>(gen.min()) + 1.0L;
+    unsigned long long log2r = std::log2(r);
+    unsigned long long b = std::numeric_limits<T>::digits;
+    unsigned long long m = std::max(1ULL, (log2r + b - 1ULL) / log2r);
+    T s = T(0);
+    T t = T(1);
+    while (m-- != 0) {
+        s += T(gen() - gen.min()) * t;
+        t *= r;
+    }
+    s /= t;
+    if (s >= T(1))
+        s = T(1) - std::numeric_limits<T>::epsilon();
+    return s;
+}
+
+/// Linear congruential generator seek.
+///
+/// \param[in] x  State.
+/// \param[in] a  State multiplier.
+/// \param[in] b  State increment.
+/// \param[in] n  Step count.
+///
+/// \note
+/// If \f$ a \% 4 = 1 \f$ and \f$ b \f$ is odd, such that
+/// the generator has a full period of \f$ 2^{m} \f$ where \f$ m \f$ is
+/// the bit depth of the unsigned integral type, then seeking by negative
+/// numbers works as expected.
+///
+template <std::unsigned_integral T>
+constexpr T lcg_seek(T x, T a, T b, T n) {
+    // Fast power by squaring.
+    T an = 1;
+    T bn = 0;
+    while (n > 0) {
+        if (n & 1) {
+            an *= a;
+            bn *= a;
+            bn += b;
+        }
+        b *= a + 1;
+        a *= a;
+        n >>= 1;
+    }
+    x *= an;
+    x += bn;
+    return x;
+}
+
+/// Linear congruential generator distance.
+///
+/// \param[in] x   State.
+/// \param[in] a   State multiplier.
+/// \param[in] b   State increment.
+/// \param[in] xn  Target state.
+///
+/// \throw std::invalid_argument
+/// Unless \f$ a \% 4 = 1 \f$ and \f$ b \f$ is odd, such that
+/// the generator has a full period of \f$ 2^{m} \f$ where \f$ m \f$ is
+/// the bit depth of the unsigned integral type.
+///
+template <std::unsigned_integral T>
+constexpr T lcg_distance(T x, T a, T b, T xn) {
+    // Ensure full period.
+    if (!((a & 3) == 1) || !((b & 1) == 1))
+        throw std::invalid_argument(__func__);
+
+    T p = 1;
+    T r = 0;
+    while (x != xn) {
+        if ((x & p) != (xn & p)) {
+            x *= a;
+            x += b;
+            r |= p;
+        }
+        p <<= 1;
+        b *= a + 1;
+        a *= a;
+    }
+    return r;
+}
+
+/// A PCG XSH-RR engine.
+///
+/// A permuted congruential generator with XOR-shift plus
+/// random-rotate output transform. The implementation here
+/// is adapted as a special case of the [implementation
+/// by Melissa O'Neill][1] affiliated with the [PCG project][2].
+///
+/// [1]: https://github.com/imneme/pcg-cpp
+/// [2]: https://pcg-random.org
+///
+template <
+        std::unsigned_integral Result,
+        std::unsigned_integral State,
+        State Multiplier,
+        State DefaultIncrement>
+class PcgXshrrEngine {
+  public:
+    // Sanity check.
+    static_assert(
+            sizeof(Result) <= sizeof(State) && //
+            (Multiplier & 3) == 1 && (DefaultIncrement & 1) == 1);
+
+    using result_type = Result;
+
+    static constexpr Result min() noexcept {
+        return 0;
+    }
+
+    static constexpr Result max() noexcept {
+        return std::numeric_limits<Result>::max();
+    }
+
+  public:
+    constexpr PcgXshrrEngine() noexcept {
+        state = state * Multiplier + increment;
+    }
+
+    constexpr PcgXshrrEngine(State seed) noexcept : state(seed) {
+        state = state + increment;
+        state = state * Multiplier + increment;
+    }
+
+    constexpr PcgXshrrEngine(State seed, State seq) noexcept : state(seed) {
+        stream(seq);
+        state = state + increment;
+        state = state * Multiplier + increment;
+    }
+
+  public:
+    constexpr State stream() const noexcept {
+        return increment >> 1;
+    }
+
+    constexpr State stream(State seq) noexcept {
+        State res = stream();
+        increment = (seq << 1) | 1;
+        return res;
+    }
+
+    constexpr void discard(State n) noexcept {
+        state = lcg_seek(state, Multiplier, increment, n);
+    }
+
+    /// Generate result.
+    constexpr Result operator()() noexcept {
+        State prev_state = state;
+        state = state * Multiplier + increment;
+        return output(prev_state);
+    }
+
+    /// Generate result in range \f$ [0, b) \f$.
+    constexpr Result operator()(Result b) noexcept {
+        ASSERT(b != 0);
+        Result rmin = (-b) % b;
+        while (1)
+            if (Result r = operator()(); r >= rmin)
+                return r % b;
+    }
+
+    /// Generate floating point result in range \f$ [u_0, u_1) \f$.
+    template <std::floating_point Float>
+    Float operator()(Float u0, Float u1) noexcept {
+        return lerp(generate_canonical<Float>(*this), u0, u1);
+    }
+
+    constexpr bool operator==(const PcgXshrrEngine& other) const noexcept {
+        return state == other.state && increment == other.increment;
+    }
+
+  public:
+    void serialize(auto& serializer) {
+        serializer <=> state;
+        serializer <=> increment;
+    }
+
+  public:
+    State state = 0;
+
+    State increment = DefaultIncrement;
+
+    /// Output function.
+    static constexpr Result output(State state) {
+        constexpr size_t result_bits = sizeof(Result) * 8;
+        constexpr size_t state_bits = sizeof(State) * 8;
+        constexpr size_t spare_bits = state_bits - result_bits;
+        constexpr size_t target_op_bits = first1(result_bits);
+        constexpr size_t op_bits =
+                spare_bits < target_op_bits ? spare_bits : target_op_bits;
+        constexpr size_t amplifier = target_op_bits - op_bits;
+        constexpr size_t mask = (1 << op_bits) - 1;
+        constexpr size_t top_spare = op_bits;
+        constexpr size_t bottom_spare = spare_bits - top_spare;
+        constexpr size_t shift = (result_bits + top_spare) >> 1;
+        size_t pivot = 0;
+        if constexpr (op_bits > 0) {
+            pivot = state;
+            pivot = mask & (pivot >> (state_bits - op_bits));
+            pivot = mask & (pivot << amplifier);
+        }
+        return rotr(Result((state ^ (state >> shift)) >> bottom_spare), pivot);
+    }
+
+    /// Hash arbitrary data.
+    static constexpr Result hash(const std::byte* from, const std::byte* to) {
+        Result code = 0;
+        for (; from + sizeof(Result) <= to; from += sizeof(Result)) {
+            Result next = 0;
+            std::memcpy(&next, from, sizeof(Result));
+            code = PcgXshrrEngine(code, next)();
+        }
+        if (from < to) {
+            Result next = 0;
+            std::memcpy(&next, from, to - from);
+            code = PcgXshrrEngine(code, next)();
+        }
+        return code;
+    }
+
+    /// Hash arbitrary data.
+    static constexpr Result hash(const void* data, size_t size) {
+        return hash(
+                static_cast<const std::byte*>(data),
+                static_cast<const std::byte*>(data) + size);
+    }
+};
+
+using Pcg8 = PcgXshrrEngine<std::uint8_t, std::uint16_t, 12829U, 47989U>;
+
+using Pcg16 = PcgXshrrEngine<
+        std::uint16_t,
+        std::uint32_t,
+        747796405UL,
+        2891336453UL>;
+
+using Pcg32 = PcgXshrrEngine<
+        std::uint32_t,
+        std::uint64_t,
+        6364136223846793005ULL,
+        1442695040888963407ULL>;
+
+using Pcg64 = PcgXshrrEngine<
+        std::uint64_t,
+        std::uint64_t,
+        6364136223846793005ULL,
+        1442695040888963407ULL>;
+
+template <std::floating_point Float>
+struct UniformDistribution {
+  public:
+    constexpr UniformDistribution() noexcept = default;
+    constexpr UniformDistribution(Float a_, Float b_) noexcept : a(a_), b(b_) {
+        if (b < a)
+            std::swap(a, b);
+    }
+    Float pdf(Float x) const noexcept {
+        return a <= x and x < b ? 1 / (b - a) : 0;
+    }
+    Float cdf(Float x) const noexcept {
+        x -= a;
+        x /= b - a;
+        x = std::fmax(x, Float(0));
+        x = std::fmin(x, Float(1));
+        return x;
+    }
+    Float cdf_inv(Float u) const noexcept {
+        return (1 - u) * a + u * b;
+    }
+
+  public:
+    Float a = 0;
+    Float b = 1;
+};
+
+template <typename T, typename U>
+UniformDistribution(T, U) -> UniformDistribution<to_floating_point_t<T, U>>;
+
+template <std::floating_point Float>
+struct NormalDistribution {
+  public:
+    constexpr NormalDistribution() noexcept = default;
+    constexpr NormalDistribution(Float mu_, Float sigma_) noexcept
+        : mu(mu_), sigma(sigma_) {
+    }
+    Float pdf(Float x) const noexcept {
+        x = (x - mu) / sigma;
+        x *= x;
+        x *= -Float(0.5);
+        Float f = Float(0.3989422804014327) * std::exp(x) / sigma;
+        return std::isfinite(f) ? f : 0;
+    }
+    Float cdf(Float x) const noexcept {
+        Float f = std::fma(
+                Float(0.5), std::erf(Float(M_SQRT1_2) * (x - mu) / sigma),
+                Float(0.5));
+        if (std::isfinite(f)) {
+            f = std::fmax(f, Float(0));
+            f = std::fmin(f, Float(1));
+            return f;
+        }
+        else
+            return x < mu ? 0 : 1;
+    }
+    Float cdf_inv(Float u) const noexcept {
+        u = std::fmax(u, Float(0));
+        u = std::fmin(u, Float(1));
+        return std::fma(Float(M_SQRT2) * sigma, erfinv(2 * u - 1), mu);
+    }
+
+  public:
+    Float mu = 0;
+    Float sigma = 1;
+};
+
+template <typename T, typename U>
+NormalDistribution(T, U) -> NormalDistribution<to_floating_point_t<T, U>>;
+
+} // namespace pre
+
+#endif // #ifndef PRE_RANDOM

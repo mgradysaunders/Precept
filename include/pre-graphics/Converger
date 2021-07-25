@@ -1,0 +1,113 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_CONVERGER
+#define PRE_GRAPHICS_CONVERGER
+
+#include <pre/math>
+
+namespace pre {
+
+template <std::floating_point Float>
+struct Converger {
+  public:
+    int max_iters = 100;
+    mutable int num_iters = 0;
+    Float target = 0;
+    Float cutoff = 1e-6;
+    std::optional<Float> lower_bound = std::nullopt;
+    std::optional<Float> upper_bound = std::nullopt;
+
+  public:
+    /// Converge with interval search.
+    template <std::invocable<Float> F>
+    constexpr bool operator()(Float& xk, F&& f) const {
+        ASSERT(lower_bound);
+        ASSERT(upper_bound);
+        Float x0 = *lower_bound, f0 = std::invoke(f, x0) - target;
+        Float x1 = *upper_bound;
+        for (num_iters = 0; num_iters < max_iters; num_iters++) {
+            xk = (x0 + x1) * Float(0.5);
+            Float fk = std::invoke(f, xk) - target;
+            if (std::abs(fk) < cutoff)
+                return true;
+
+            if (std::signbit(fk) == std::signbit(f0))
+                x0 = xk;
+            else
+                x1 = xk;
+        }
+        return false;
+    }
+
+    /// Converge with Newton's method.
+    template <std::invocable<Float> F, std::invocable<Float> G>
+    constexpr bool operator()(Float& xk, F&& f, G&& g, int m = 1) const {
+        bool clamped_lower = false;
+        bool clamped_upper = false;
+        for (num_iters = 0; num_iters < max_iters; num_iters++) {
+            Float fk = std::invoke(f, xk) - target;
+            if (std::abs(fk) < cutoff)
+                return true;
+
+            xk -= fk / std::invoke(g, xk) * m;
+            if (std::isfinite(xk) == false)
+                break;
+
+            if (lower_bound) {
+                if (xk < *lower_bound) {
+                    xk = *lower_bound;
+                    if (clamped_lower == false)
+                        clamped_lower = true;
+                    else
+                        return true; // Don't spin forever!
+                }
+                else
+                    clamped_lower = false;
+            }
+            if (upper_bound) {
+                if (xk > *upper_bound) {
+                    xk = *upper_bound;
+                    if (clamped_upper == false)
+                        clamped_upper = true;
+                    else
+                        return true; // Don't spin forever!
+                }
+                else
+                    clamped_upper = false;
+            }
+        }
+        return false;
+    }
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_CONVERGER

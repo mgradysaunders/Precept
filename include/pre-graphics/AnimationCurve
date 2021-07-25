@@ -1,0 +1,101 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_ANIMATION_CURVE
+#define PRE_GRAPHICS_ANIMATION_CURVE
+
+#include <pre/math>
+
+namespace pre {
+
+/// An animation curve.
+///
+/// \note
+/// This is based off of animation curves appearing in applications
+/// like Blender and Unity. Weighted evaluation allows for more control,
+/// but is more computationally expensive.
+///
+class AnimationCurve {
+  public:
+    enum class Wrap {
+        Clamp,  ///< Clamp to end value.
+        Repeat, ///< Repeat forever.
+        Mirror  ///< Repeat forever, mirroring every other cycle.
+    };
+    Wrap wrap_mode_before = Wrap::Clamp;
+    Wrap wrap_mode_after = Wrap::Clamp;
+
+    /// A keyframe.
+    struct Keyframe {
+        enum class Weight {
+            None = 0, ///< Unweighted.
+            In = 1,   ///< Weighted only in.
+            Out = 2,  ///< Weighted only out.
+            Both = 3  ///< Weighted both in and out.
+        };
+        Weight weight_mode = Weight::None;
+        float time = 0;
+        float value = 0;
+        float in_slope = 0;
+        float in_weight = 0.333f;
+        float out_slope = 0;
+        float out_weight = 0.333f;
+
+        void serialize(auto& serializer) {
+            serializer <=> weight_mode;
+            serializer <=> time;
+            serializer <=> value;
+            serializer <=> in_slope;
+            serializer <=> in_weight;
+            serializer <=> out_slope;
+            serializer <=> out_weight;
+        }
+        constexpr bool operator<(const Keyframe& other) const noexcept {
+            return time < other.time;
+        }
+    };
+
+    /// Keyframe array, must be sorted!
+    std::vector<Keyframe> keyframes;
+
+    /// Serialize.
+    void serialize(auto& serializer) {
+        serializer <=> wrap_mode_before;
+        serializer <=> wrap_mode_after;
+        serializer <=> keyframes;
+    }
+
+  public:
+    float operator()(float time) const;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_ANIMATION_CURVE

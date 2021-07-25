@@ -1,0 +1,601 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_SERIALIZER
+#define PRE_SERIALIZER
+
+// for std::copy
+#include <algorithm>
+
+// for size_t, std::ptrdiff_t, std::byte, ...
+#include <cstddef>
+
+// for std::uint32_t
+#include <cstdint>
+
+// for std::map
+#include <map>
+
+// for std::endian
+#include <bit>
+
+// for std::vector
+#include <vector>
+
+// for std::variant
+#include <variant>
+
+// for pre::StaticString
+#include <pre/memory>
+
+#if __has_include(<zlib.h>)
+
+// for std::cerr
+#include <iostream>
+
+// for gzip
+#include <zlib.h>
+
+#endif // #if __has_include(<zlib.h>)
+
+namespace pre {
+
+class Serializer;
+
+class Serializable;
+
+inline std::map<StaticString<char, 64>, Serializable* (*)()> serializable_new;
+
+/// A serializable object interface.
+///
+/// This class defines an interface to a dynamic object usable with the
+/// serializer class. Notice that serializable objects must be reference
+/// countable, and used with the `RefPtr` reference counter in order to be
+/// serialized.
+///
+/// Most-derived subclasses must be final, must be default constructible,
+/// must place the `SERIALIZABLE` macro inside the class body, and must
+/// implement the `serialize` method. For example,
+/// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{.cpp}
+/// class Foo final : virtual public pre::Serializable {
+///   public:
+///     SERIALIZABLE(Foo);
+///     void serialize(pre::Serializer& serializer) {
+///         serializer <=> bar_;
+///     }
+///   private:
+///     int bar_ = 0;
+/// };
+/// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/// Then, the type `RefPtr<Foo>` is serializable using the spaceship
+/// operator. Note that it is only necessary to implement a serializable
+/// class with this interface if the class type needs to be dynamic. In
+/// the above example, `Foo` could simply implement `serialize()` without
+/// inheriting from `Serializable` or using the `SERIALIZABLE` macro and
+/// `Foo` would still be serializable using the spaceship operator, but
+/// `RefPtr<Foo>` would not be.
+///
+class Serializable : virtual public RefCountable {
+  public:
+    /// Destructor.
+    virtual ~Serializable() = default;
+
+    /// Serial subclass name.
+    ///
+    /// \note
+    /// This is a pointer to a character string literal equal to the
+    /// name of the most derived subclass. Client code should never define
+    /// this function directly, as it is implemented by the `SERIALIZABLE`
+    /// macro.
+    ///
+    virtual const char* serial_subclass() const noexcept = 0;
+
+    /// Serialize.
+    ///
+    /// \note
+    /// This should serialize all relevant members of the
+    /// most derived subclass into the given serializer. Client code should
+    /// always define this function directly, as it is _not_ implemented by
+    /// the `SERIALIZABLE` macro.
+    ///
+    virtual void serialize(Serializer&) = 0;
+};
+
+/// A serializable subclass macro to generate boilerplate.
+///
+/// This macro must appear in the class body of most derived `Serializable`
+/// subclasses. The `Subclass` argument must be the name of the most derived
+/// subclass, which must be derived from `Serializable`, must be final, and
+/// must be default constructible. The implementation checks each of these
+/// conditions using static assertions, so client code will not compile
+/// otherwise.
+///
+/// \note
+/// For those curious, this macro simply implements the `serial_subclass`
+/// method, and uses a static inline member variable to automatically add
+/// a callback to the `serializable_new` function table at program
+/// initialization.
+///
+#define SERIALIZABLE(Subclass)                                                \
+    const char* serial_subclass() const noexcept {                            \
+        static_assert(std::is_final_v<Subclass>);                             \
+        static_assert(std::is_default_constructible_v<Subclass>);             \
+        static_assert(std::is_base_of_v<pre::Serializable, Subclass>);        \
+        static_assert(                                                        \
+                std::is_same_v<std::decay_t<decltype(*this)>, Subclass>);     \
+        return #Subclass;                                                     \
+    }                                                                         \
+    static inline pre::Serializable* serial_new() {                           \
+        return new Subclass();                                                \
+    }                                                                         \
+    struct SerialInit {                                                       \
+        SerialInit() {                                                        \
+            auto result = pre::serializable_new.insert(                       \
+                    {pre::StaticString<char, 64>(#Subclass),                  \
+                     &Subclass::serial_new});                                 \
+            if (!result.second)                                               \
+                throw std::logic_error(                                       \
+                        "serializable name collision for " #Subclass);        \
+        }                                                                     \
+    };                                                                        \
+    static inline SerialInit serial_init = {};
+
+/// A serializer interface.
+///
+/// This class defines the interface to a so-called _serializer_,
+/// for binary serialization and de-serialization of C++ objects using
+/// the new spaceship operator. This makes it convenient to implicitly
+/// define binary file-formats via hierarchical/recursive serialization
+/// of component data structures.
+///
+class Serializer {
+  public:
+    virtual ~Serializer() = default;
+
+    enum class Mode {
+        Reading, ///< Reading.
+        Writing  ///< Writing.
+    };
+
+    Serializer(Mode m) noexcept : mode_(m) {
+    }
+
+    Serializer(const Serializer&) = delete;
+
+  public:
+    Mode mode() const noexcept {
+        return mode_;
+    }
+
+    bool reading() const noexcept {
+        return mode_ == Mode::Reading;
+    }
+
+  private:
+    const Mode mode_;
+
+    /// Bookkeeping for serializable objects read.
+    std::vector<RefPtr<Serializable>> objects_read_;
+
+    /// Bookkeeping for serializable objects written.
+    std::map<RefPtr<Serializable>, std::uint32_t> objects_written_;
+
+  public:
+    /// Read or write primitive elements.
+    ///
+    /// \param[in] ptr  Pointer.
+    /// \param[in] num  Number of elements.
+    /// \param[in] sz   Element size in bytes.
+    ///
+    /// \throw std::invalid_argument
+    /// - If pointer is null and number of elements is non-zero
+    /// - If pointer is non-null and element size is zero
+    /// - If pointer is non-null and element size is greater than 16
+    ///
+    void read_or_write(void* ptr, size_t num, size_t sz) {
+        if (!num)
+            return;
+        if (!ptr || !sz || sz > 16)
+            throw std::invalid_argument(__func__);
+
+        std::byte* ptr_bytes = static_cast<std::byte*>(ptr);
+        if (reading()) {
+            on_read(ptr, num * sz);
+            // Flip endian?
+            if (std::endian::native == std::endian::big && sz >= 2)
+                for (size_t off = 0; off < num; off++)
+                    std::reverse(
+                            &ptr_bytes[0] + off * sz,
+                            &ptr_bytes[0] + off * sz + sz);
+        }
+        else {
+            // Flip endian?
+            if (std::endian::native == std::endian::big && sz >= 2) {
+                std::byte tmp_bytes[16];
+                for (size_t off = 0; off < num; off++) {
+                    std::copy(
+                            &ptr_bytes[0] + off * sz,
+                            &ptr_bytes[0] + off * sz + sz, &tmp_bytes[0]);
+                    std::reverse(&tmp_bytes[0], &tmp_bytes[0] + sz);
+                    on_write(&tmp_bytes[0], sz);
+                }
+            }
+            else {
+                on_write(ptr, num * sz);
+            }
+        }
+    }
+
+    /// Read or write serializable value.
+    ///
+    /// This either reads or writes a dynamically-typed
+    /// serializable object. The implementation uses an unsigned 32-bit
+    /// index to avoid duplicate serializables in the output. If the
+    /// index is the special constant `NextIndex`, the subclass name and
+    /// whatever is performed by the subclass `serialize` method follows.
+    /// The subclass name is used with the `serializable_new` function
+    /// table to dynamically construct and initialize arbitrary
+    /// most-derived serializable types.
+    ///
+    /// If the index is not `NextIndex`, then the index is the only
+    /// thing read or written, and the object is looked-up or stored in
+    /// the bookkeeping members `objects_read_` and `objects_written_`.
+    ///
+    void read_or_write(RefPtr<Serializable>& value) {
+        constexpr std::uint32_t NextIndex = std::uint32_t(-1);
+        constexpr std::uint32_t NullIndex = std::uint32_t(-2);
+        if (reading()) {
+            // Read index.
+            std::uint32_t index = 0;
+            read_or_write(&index, 1, 4);
+            // Is null?
+            if (index == NullIndex) {
+                value = nullptr;
+            }
+            // Already read?
+            else if (index != NextIndex) {
+                value = objects_read_.at(index);
+            }
+            else {
+                // Else, properly de-serialize.
+                char subclass[64] = {};
+                read_or_write(&subclass[0], 64, 1);
+                const auto& value_new = serializable_new.at(
+                        StaticString<char, 64>(&subclass[0]));
+                value = RefPtr(value_new());
+                objects_read_.push_back(value);
+                value->serialize(*this);
+            }
+        }
+        else {
+            // Is null?
+            if (value.get() == nullptr) {
+                // Write null index.
+                std::uint32_t index = NullIndex;
+                read_or_write(&index, 1, 4);
+                return;
+            }
+            // Attempt to add to objects-written table.
+            auto [itr, inserted] = //
+                    objects_written_.insert(
+                            std::make_pair(value, objects_written_.size()));
+            // Already written?
+            if (!inserted) {
+                // Write index.
+                std::uint32_t index = itr->second;
+                read_or_write(&index, 1, 4);
+                return;
+            }
+            // Else, properly serialize.
+            std::uint32_t index = NextIndex;
+            StaticString<char, 64> subclass = value->serial_subclass();
+            read_or_write(&index, 1, 4);
+            read_or_write(&subclass[0], 64, 1);
+            value->serialize(*this);
+        }
+    }
+
+  protected:
+    /// On-read callback.
+    ///
+    /// \param[in] ptr  Pointer.
+    /// \param[in] num  Number of bytes to read.
+    ///
+    virtual void on_read(void* ptr, size_t num) = 0;
+
+    /// On-write callback.
+    ///
+    /// \param[in] ptr  Pointer.
+    /// \param[in] num  Number of bytes to write.
+    ///
+    virtual void on_write(const void* ptr, size_t num) = 0;
+};
+
+/// Serialize serializable primitive element.
+inline Serializer& operator<=>(
+        Serializer& serializer, concepts::arithmetic_or_enum auto& value) {
+    serializer.read_or_write(&value, 1, sizeof(value));
+    return serializer;
+}
+
+/// Serialize serializable object.
+inline Serializer& operator<=>(
+        Serializer& serializer, RefPtr<Serializable>& value) {
+    serializer.read_or_write(value);
+    return serializer;
+}
+
+/// Serialize anything defining a serialize member function.
+template <typename Any>
+inline Serializer& operator<=>(
+        Serializer& serializer, Any& value) requires requires {
+    value.serialize(serializer);
+}
+{
+    value.serialize(serializer);
+    return serializer;
+}
+
+/// Serialize array.
+template <typename Any, size_t N>
+inline Serializer& operator<=>(Serializer& serializer, Any (&values)[N]) {
+    if constexpr (concepts::arithmetic_or_enum<Any>)
+        serializer.read_or_write(&values[0], N, sizeof(Any));
+    else
+        for (auto& value : values)
+            serializer <=> value;
+    return serializer;
+}
+
+/// Serialize standard pair.
+template <typename... Args>
+inline Serializer& operator<=>(
+        Serializer& serializer, std::pair<Args...>& values) {
+    using Arg1 = std::decay_t<decltype(values.first)>;
+    using Arg2 = std::decay_t<decltype(values.second)>;
+    serializer <=> const_cast<Arg1&>(values.first);
+    serializer <=> const_cast<Arg2&>(values.second);
+    return serializer;
+}
+
+/// Serialize standard tuple.
+template <typename... Args>
+inline Serializer& operator<=>(
+        Serializer& serializer, std::tuple<Args...>& values) {
+    // clang-format off
+    auto dummy1 = [&](auto& arg) { serializer <=> arg; return 0; };
+    auto dummy2 = [&](auto&... args) { std::make_tuple(dummy1(args)...); };
+    std::apply(dummy2, values);
+    // clang-format on
+    return serializer;
+}
+
+/// Serialize standard variant.
+template <typename... Args>
+inline Serializer& operator<=>(
+        Serializer& serializer, std::variant<Args...>& value) {
+    auto dummy = [&](auto& arg) { serializer <=> arg; };
+    auto index = std::uint32_t(value.index());
+    serializer <=> index;
+    if (serializer.reading()) {
+        std::variant<Args...> default_values[sizeof...(Args)] = {Args{}...};
+        value = default_values[index];
+    }
+    std::visit(dummy, value);
+    return serializer;
+}
+
+/// Serialize container.
+template <typename Container>
+inline Serializer& operator<=>(
+        Serializer& serializer, Container& container) requires requires {
+    requires(not requires { container.serialize(serializer); });
+    requires concepts::minimal_container<Container>;
+    requires concepts::sequence_constructible<Container>;
+    { container.size() }
+    ->std::convertible_to<std::uint32_t>;
+}
+{
+    std::uint32_t size = container.size();
+    serializer <=> size;
+
+    // Writing?
+    if (!serializer.reading()) {
+        // Write each value.
+        for (auto& value : container)
+            serializer <=> value;
+    }
+    else {
+        // Read each value into temporary vector. If value
+        // type is arithmetic or enum, read in one call for efficiency.
+        std::vector<typename Container::value_type> values(size);
+        if constexpr (concepts::arithmetic_or_enum<
+                              typename Container::value_type>)
+            serializer.read_or_write(
+                    values.data(), values.size(),
+                    sizeof(typename Container::value_type));
+        else
+            for (auto& value : values)
+                serializer <=> value;
+
+        // If container is allocator aware, preserve allocator.
+        if constexpr (concepts::allocator_aware<Container>)
+            container = Container(
+                    Container(values.begin(), values.end()),
+                    container.get_allocator());
+        else
+            container = Container(values.begin(), values.end());
+    }
+    return serializer;
+}
+
+/// A standard serializer.
+class StandardSerializer final : public Serializer {
+  public:
+    /// Construct from standard input stream.
+    StandardSerializer(std::istream& istr)
+        : Serializer(Mode::Reading), istr_(&istr) {
+    }
+
+    /// Construct from standard output stream.
+    StandardSerializer(std::ostream& ostr)
+        : Serializer(Mode::Writing), ostr_(&ostr) {
+    }
+
+  protected:
+    /// \copydoc Serializer::on_read()
+    void on_read(void* ptr, size_t num) {
+        istr_->read(static_cast<char*>(ptr), num);
+    }
+
+    /// \copydoc Serializer::on_write()
+    void on_write(const void* ptr, size_t num) {
+        ostr_->write(static_cast<const char*>(ptr), num);
+    }
+
+  private:
+    /// Input stream.
+    std::istream* istr_ = nullptr;
+
+    /// Output stream.
+    std::ostream* ostr_ = nullptr;
+};
+
+#if __has_include(<zlib.h>)
+
+/// A zlib-compressed serializer.
+///
+/// This code depends on [zlib][1], a well-known compression library. While
+/// zlib is more or less &ldquo;standard&rdquo;, it is not part of the C or
+/// C++ standard libraries, and so it imposes a third-party link dependency
+/// on client code.
+///
+/// If building with CMake, add `find_package(ZLIB REQUIRED)`
+/// to `CMakeLists.txt` to find the zlib CMake package. Then, add
+/// `${ZLIB_INCLUDE_DIRS}` to target include directories and
+/// link to `${ZLIB_LIBRARIES}`.
+///
+/// [1]: https://www.zlib.net
+///
+class ZlibSerializer : public Serializer {
+  public:
+    /// Default constructor.
+    ZlibSerializer() = default;
+
+    /// Constructor.
+    ///
+    /// \param[in] filename
+    /// Filename.
+    ///
+    /// \param[in] mode
+    /// Mode, passed to `gzopen()`.
+    ///
+    /// \note
+    /// Mode is expected to be a standard C-style openmode (e.g., `"rb"`
+    /// or `"wb"`), but may also contain additional characters specifying
+    /// the compression type and level. See the [zlib documentation][1]
+    /// for more information.
+    /// [1]: https://www.zlib.net/manual.html
+    ///
+    /// \throw std::runtime_error
+    /// If `gzopen()` fails.
+    ///
+    ZlibSerializer(const char* filename, const char* mode)
+        : Serializer(*mode == 'r' ? Mode::Reading : Mode::Writing) {
+        // Open.
+        if (!(file_ = gzopen(filename, mode)))
+            throw std::runtime_error(std::string(__func__)
+                                             .append(": can't open ")
+                                             .append(filename));
+
+        // Set internal buffer to 64KB. This call returns -1 on error,
+        // but it should not fail since 1) we know it opened successfully,
+        // 2) we are calling before any read/write operations, and 3) the
+        // buffer allocation is deferred to the first read/write operation.
+        (void)gzbuffer(file_, 65536);
+    }
+
+    /// Destructor.
+    ///
+    /// \note
+    /// If `file_` is non-null and `gzclose()` fails, this indicates
+    /// that something has gone very wrong. In that case, the implementation
+    /// writes `gzerror()` to `std::cerr`, and then terminates the program with
+    /// the `EXIT_FAILURE` exit code, since exceptions cannot be thrown from
+    /// destructors.
+    ///
+    ~ZlibSerializer() {
+        if (file_ != nullptr) {
+            int res = gzclose(file_);
+            if (res != Z_OK) {
+                // Cannot throw from destructor...
+                std::cerr << gzerror(file_, &res) << '\n';
+                std::exit(EXIT_FAILURE);
+            }
+        }
+        file_ = nullptr;
+    }
+
+  protected:
+    /// \copydoc Serializer::on_read()
+    ///
+    /// \throw std::runtime_error
+    /// If `gzread()` fails.
+    ///
+    void on_read(void* ptr, size_t num) {
+        int res = gzread(file_, ptr, num);
+        if (res == 0)
+            throw std::runtime_error(gzerror(file_, &res));
+    }
+
+    /// \copydoc Serializer::on_write()
+    ///
+    /// \throw std::runtime_error
+    /// If `gzwrite()` fails.
+    ///
+    void on_write(const void* ptr, size_t num) {
+        int res = gzwrite(file_, ptr, num);
+        if (res == 0)
+            throw std::runtime_error(gzerror(file_, &res));
+    }
+
+  private:
+    /// Gzip file handle.
+    gzFile file_ = nullptr;
+};
+
+#endif // #if __has_include(<zlib.h>)
+
+} // namespace pre
+
+#endif // #ifndef PRE_SERIALIZER

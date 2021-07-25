@@ -1,0 +1,101 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_WAVEFRONT_OBJ
+#define PRE_GRAPHICS_WAVEFRONT_OBJ
+
+#include <map>
+#include <string>
+#include <string_view>
+#include <vector>
+#include <pre/Array>
+#include <pre/math>
+
+namespace pre {
+
+class WavefrontObj {
+  public:
+    template <size_t Dim>
+    struct Buffer {
+      public:
+        std::vector<Array<float, Dim>> v;
+        std::vector<std::uint32_t> f;
+
+      public:
+        void clear() noexcept {
+            v.clear();
+            f.clear();
+        }
+        operator bool() const noexcept {
+            return f.size() > 0;
+        }
+    };
+    using Buffer2 = Buffer<2>;
+    using Buffer3 = Buffer<3>;
+
+  public:
+    WavefrontObj() noexcept = default;
+
+    explicit WavefrontObj(const std::string& filename) {
+        read(filename);
+    }
+
+    void read(const std::string& filename);
+
+    void read(std::istream&);
+
+    void write(const std::string& filename) const;
+
+    void write(std::ostream&) const;
+
+    void clear() noexcept {
+        positions.clear();
+        texcoords.clear();
+        normals.clear();
+        face_sizes.clear();
+        face_materials.clear();
+        material_names.clear();
+    }
+
+  public:
+    Buffer3 positions;
+    Buffer2 texcoords;
+    Buffer3 normals;
+    std::vector<std::uint8_t> face_sizes;
+    std::vector<std::uint16_t> face_materials;
+    std::map<std::uint16_t, std::string> material_names;
+    bool has_materials() const noexcept {
+        return face_materials.size() > 0;
+    }
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_WAVEFRONT_OBJ

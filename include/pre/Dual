@@ -1,0 +1,326 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-20 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_DUAL
+#define PRE_DUAL
+
+#include <pre/math>
+
+namespace pre {
+
+/// A dual number.
+///
+/// This class represents a dual number of the form \f$ a + \varepsilon b \f$,
+/// where \f$ \varepsilon \f$ is the so-called _dual unit_. Similar to the
+/// imaginary unit \f$ i = \sqrt{-1} \f$ in complex arithmetic, the dual
+/// unit is a symbol with properties unlike any real number.
+///
+/// In particular,
+/// - \f$ \varepsilon\neq 0 \f$,
+/// - \f$ \varepsilon^2 = 0 \f$.
+///
+template <concepts::floating_point_or_complex Value>
+class Dual {
+  public:
+    typedef Value value_type;
+
+  public:
+    constexpr Dual() noexcept = default;
+
+    constexpr Dual(const Value& a, const Value& b = {}) noexcept
+        : x_{a, b} {
+    }
+
+  public:
+    constexpr const Value& real() const noexcept {
+        return x_[0];
+    }
+
+    constexpr const Value& dual() const noexcept {
+        return x_[1];
+    }
+
+    constexpr Value real(Value a) noexcept {
+        return std::exchange(x_[0], a);
+    }
+
+    constexpr Value dual(Value b) noexcept {
+        return std::exchange(x_[1], b);
+    }
+
+    template <std::integral Int>
+    constexpr decltype(auto) operator[](Int pos) noexcept {
+        return (x_[pos]);
+    }
+
+    template <std::integral Int>
+    constexpr decltype(auto) operator[](Int pos) const noexcept {
+        return (x_[pos]);
+    }
+
+  public:
+    /// Conjugate.
+    ///
+    /// \note
+    /// This calculates the _complex_ conjugate, following the
+    /// convention that all functions named `conj()` should be complexy
+    /// in nature. To calculate the dual conjugate, call `dual_conj()`.
+    ///
+    constexpr Dual conj() const noexcept {
+        return {pre::conj(x_[0]), pre::conj(x_[1])};
+    }
+
+    /// Dual conjugate.
+    constexpr Dual dual_conj() const noexcept {
+        return {x_[0], -x_[1]};
+    }
+
+  public:
+    template <typename Other>
+    constexpr operator Dual<Other>() const noexcept {
+        return {static_cast<Other>(x_[0]), static_cast<Other>(x_[1])};
+    }
+
+  public:
+    void serialize(auto& serializer) {
+        serializer <=> x_[0];
+        serializer <=> x_[1];
+    }
+
+  private:
+    Value x_[2] = {};
+
+  public:
+    /// Read from `std::basic_istream`.
+    ///
+    /// Format is `(a,b)`. Sets `std::ios_base::failbit` on error.
+    ///
+    template <concepts::istream Stream>
+    friend Stream& operator<<(Stream& stream, Dual& x) {
+        using Char = typename Stream::char_type;
+        using CharTraits = typename Stream::traits_type;
+        Char ch;
+        if (!(stream >> ch) ||
+            !CharTraits::eq(ch, CharTraits::to_char_type('('))) {
+            stream.setstate(std::ios_base::failbit);
+            return stream;
+        }
+        stream >> x[0];
+        if (!(stream >> ch) ||
+            !CharTraits::eq(ch, CharTraits::to_char_type(','))) {
+            stream.setstate(std::ios_base::failbit);
+            return stream;
+        }
+        stream >> x[1];
+        if (!(stream >> ch) ||
+            !CharTraits::eq(ch, CharTraits::to_char_type(')'))) {
+            stream.setstate(std::ios_base::failbit);
+            return stream;
+        }
+        return stream;
+    }
+
+    /// Write into `std::basic_ostream`.
+    ///
+    /// Format is `(a,b)`.
+    ///
+    template <concepts::ostream Stream>
+    friend Stream& operator<<(Stream& stream, const Dual& x) {
+        stream << '(';
+        stream << x[0] << ',';
+        stream << x[1] << ')';
+        return stream;
+    }
+};
+
+template <typename T>
+Dual(const T&) -> Dual<T>;
+
+template <typename T, typename U>
+Dual(const T&, const U&) -> Dual<std::common_type_t<T, U>>;
+
+template <typename T>
+[[gnu::always_inline]] constexpr T real(const Dual<T>& x) {
+    return x.real();
+}
+
+template <typename T>
+[[gnu::always_inline]] constexpr T dual(const Dual<T>& x) {
+    return x.dual();
+}
+
+template <typename T>
+[[gnu::always_inline]] constexpr Dual<T> conj(const Dual<T>& x) {
+    return x.conj();
+}
+
+template <typename T>
+[[gnu::always_inline]] constexpr Dual<T> dual_conj(const Dual<T>& x) {
+    return x.dual_conj();
+}
+
+template <typename T>
+constexpr Dual<T> operator+(const Dual<T>& x) {
+    return {+x.real(), +x.dual()};
+}
+
+template <typename T>
+constexpr Dual<T> operator-(const Dual<T>& x) {
+    return {-x.real(), -x.dual()};
+}
+
+template <typename T, typename U>
+constexpr auto operator+(const Dual<T>& x0, const Dual<U>& x1) {
+    return Dual{x0.real() + x1.real(), x0.dual() + x1.dual()};
+}
+
+template <typename T, typename U>
+constexpr auto operator-(const Dual<T>& x0, const Dual<U>& x1) {
+    return Dual{x0.real() - x1.real(), x0.dual() - x1.dual()};
+}
+
+template <typename T, typename U>
+constexpr auto operator*(const Dual<T>& x0, const Dual<U>& x1) {
+    return Dual{
+            x0.real() * x1.real(),
+            x0.real() * x1.dual() + x0.dual() * x1.real()};
+}
+
+template <typename T, typename U>
+constexpr auto operator/(const Dual<T>& x0, const Dual<U>& x1) {
+    return Dual{
+            x0.real() / x1.real(),
+            (x0.dual() * x1.real() - x0.real() * x1.dual()) /
+                    (x1.real() * x1.real())};
+}
+
+template <typename T, concepts::arithmetic_or_complex U>
+constexpr auto operator+(const Dual<T>& x0, const U& x1) {
+    return Dual{x0.real() + x1, x0.dual()};
+}
+
+template <typename T, concepts::arithmetic_or_complex U>
+constexpr auto operator-(const Dual<T>& x0, const U& x1) {
+    return Dual{x0.real() - x1, x0.dual()};
+}
+
+template <typename T, concepts::arithmetic_or_complex U>
+constexpr auto operator*(const Dual<T>& x0, const U& x1) {
+    return Dual{x0.real() * x1, x0.dual() * x1};
+}
+
+template <typename T, concepts::arithmetic_or_complex U>
+constexpr auto operator/(const Dual<T>& x0, const U& x1) {
+    return Dual{x0.real() / x1, x0.dual() / x1};
+}
+
+template <concepts::arithmetic_or_complex T, typename U>
+constexpr auto operator+(const T& x0, const Dual<U>& x1) {
+    return Dual{x0 + x1.real(), x1.dual()};
+}
+
+template <concepts::arithmetic_or_complex T, typename U>
+constexpr auto operator-(const T& x0, const Dual<U>& x1) {
+    return Dual{x0 - x1.real(), -x1.dual()};
+}
+
+template <concepts::arithmetic_or_complex T, typename U>
+constexpr auto operator*(const T& x0, const Dual<U>& x1) {
+    return Dual{x0 * x1.real(), x0 * x1.dual()};
+}
+
+template <concepts::arithmetic_or_complex T, typename U>
+constexpr auto operator/(const T& x0, const Dual<U>& x1) {
+    return Dual{x0 / x1.real(), -x0 * x1.dual() / (x1.real() * x1.real())};
+}
+
+template <typename T, typename Any>
+constexpr Dual<T>& operator+=(Dual<T>& x, const Any& any) {
+    return x = x + any;
+}
+
+template <typename T, typename Any>
+constexpr Dual<T>& operator-=(Dual<T>& x, const Any& any) {
+    return x = x - any;
+}
+
+template <typename T, typename Any>
+constexpr Dual<T>& operator*=(Dual<T>& x, const Any& any) {
+    return x = x * any;
+}
+
+template <typename T, typename Any>
+constexpr Dual<T>& operator/=(Dual<T>& x, const Any& any) {
+    return x = x / any;
+}
+
+template <typename T, typename U>
+constexpr bool operator==(const Dual<T>& x0, const Dual<U>& x1) {
+    return x0.real() == x1.real() && x0.dual() == x1.dual();
+}
+
+template <typename T, typename U>
+constexpr bool operator!=(const Dual<T>& x0, const Dual<U>& x1) {
+    return x0.real() != x1.real() || x0.dual() != x1.dual();
+}
+
+template <typename T>
+inline bool isinf(const Dual<T>& x) {
+    return pre::isinf(x.real()) || pre::isinf(x.dual());
+}
+
+template <typename T>
+inline bool isnan(const Dual<T>& x) {
+    return pre::isnan(x.real()) || pre::isnan(x.dual());
+}
+
+template <typename T>
+inline bool isfinite(const Dual<T>& x) {
+    return pre::isfinite(x.real()) && pre::isfinite(x.dual());
+}
+
+template <typename T>
+inline bool isnormal(const Dual<T>& x) {
+    return pre::isnormal(x.real()) && pre::isnormal(x.dual());
+}
+
+template <typename T>
+struct to_floating_point<Dual<T>> {
+    using type = to_floating_point_t<T>;
+};
+
+} // namespace pre
+
+#include "_hidden/Dual_cmath.inl"
+
+#endif // #ifndef PRE_DUAL

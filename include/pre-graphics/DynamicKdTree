@@ -1,0 +1,179 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_DYNAMIC_KD_TREE
+#define PRE_GRAPHICS_DYNAMIC_KD_TREE
+
+#include <pre/memory>
+#include <pre-graphics/Bound>
+
+namespace pre {
+
+template <size_t Dim>
+class DynamicKdTree {
+    static_assert(Dim == 2 or Dim == 3);
+
+  public:
+    using Point = Array<float, Dim>;
+
+    using Box = Bound<float, Dim>;
+
+    using Int = std::int32_t;
+
+    static constexpr Int Nil = -1;
+
+    struct Node {
+        Point point;
+        union {
+            Int parent;
+            Int next;
+        };
+        Int child0 = Nil;
+        Int child1 = Nil;
+        Int axis = 0;
+        Int height = 0;
+
+        constexpr bool is_leaf() const noexcept {
+            return child0 == Nil;
+        }
+        constexpr bool is_branch() const noexcept {
+            return child0 != Nil;
+        }
+    };
+
+    using Nodes = std::vector<Node>;
+
+  public:
+    DynamicKdTree() = default;
+
+    DynamicKdTree(const DynamicKdTree&) = default;
+
+    DynamicKdTree(DynamicKdTree&&) = default;
+
+    DynamicKdTree& operator=(const DynamicKdTree&) = default;
+
+    DynamicKdTree& operator=(DynamicKdTree&&) = default;
+
+  public:
+    Int max_height() const {
+        return root_ == Nil ? 0 : nodes_[root_].height;
+    }
+
+    Int max_imbalance() const {
+        Int imbalance = 0;
+        for (const Node& node_ref : nodes_) {
+            if (node_ref.height < 2)
+                continue;
+            const Node& child0_ref = nodes_[node_ref.child0];
+            const Node& child1_ref = nodes_[node_ref.child1];
+            imbalance = pre::max(
+                    imbalance,
+                    pre::abs(child0_ref.height - child1_ref.height));
+        }
+        return imbalance;
+    }
+
+    Int insert(const Point& point);
+
+    void remove(Int node);
+
+    void clear() noexcept {
+        nodes_.clear();
+        free_ = Nil;
+        root_ = Nil;
+    }
+
+    bool empty() const noexcept {
+        return root_ == Nil;
+    }
+
+    Node& operator[](Int node) noexcept {
+        return nodes_[node];
+    }
+
+    const Node& operator[](Int node) const noexcept {
+        return nodes_[node];
+    }
+
+  private:
+    Nodes nodes_;
+
+    Int free_ = Nil;
+
+    Int root_ = Nil;
+
+#if 0
+  private:
+    template <bool IsDynamic, typename Func>
+    void do_traverse(Point point, Float radius, Func&& func) const {
+        radius *= radius;
+        NodeStack<IsDynamic> todo(optimal_depth(), root_);
+        while (not todo.empty()) {
+            Node* node = todo.pop();
+            Point diff = node->value.first - point;
+            if (node->value and length2(diff) < radius and
+                not std::invoke(func, iterator(node))) // Stop?
+                return;
+            todo.push_if(diff[node->axis] > -radius, node->left);
+            todo.push_if(diff[node->axis] < +radius, node->right);
+        }
+    }
+
+    template <bool IsDynamic>
+    iterator do_nearest(Point point) const {
+        Node* result = nullptr;
+        Float result_dist2 = Inf<Float>;
+        NodeStack<IsDynamic> todo(optimal_depth(), root_);
+        while (not todo.empty()) {
+            Node* node = todo.pop();
+            Point diff = node->value.first - point;
+            if (node->value) {
+                Float dist2 = length2(diff);
+                if (result_dist2 > dist2) {
+                    result_dist2 = dist2;
+                    result = node;
+                }
+            }
+            Float d = diff[node->axis];
+            todo.push_if(d * d < result_dist2 or d > 0, node->left);
+            todo.push_if(d * d < result_dist2 or d < 0, node->right);
+        }
+        return result;
+    }
+#endif
+};
+
+using DynamicKdTree2 = DynamicKdTree<2>;
+
+using DynamicKdTree3 = DynamicKdTree<3>;
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_DYNAMIC_KD_TREE

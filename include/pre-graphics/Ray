@@ -1,0 +1,141 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_RAY
+#define PRE_GRAPHICS_RAY
+
+#include <pre/Array>
+#include <pre/math>
+
+namespace pre {
+
+template <std::floating_point Float, size_t Dim>
+struct Hit {
+    /// Point.
+    Array<Float, Dim> point;
+
+    /// Normal direction, may be non-normalized.
+    Array<Float, Dim> normal;
+
+    /// Surface coordinate U.
+    Float u = 0;
+
+    /// Surface coordinate V (3D only).
+    Float v = 0;
+};
+
+template <std::floating_point Float = float>
+using Hit2 = Hit<Float, 2>;
+
+template <std::floating_point Float = float>
+using Hit3 = Hit<Float, 3>;
+
+template <typename>
+struct RayTester;
+
+template <std::floating_point Float, size_t Dim>
+class Ray {
+  public:
+    static_assert(Dim == 2 or Dim == 3);
+
+    /// Origin.
+    Array<Float, Dim> org;
+
+    /// Direction.
+    Array<Float, Dim> dir;
+
+    /// Parameter minimum \f$ t_{\min} \f$.
+    Float tmin = 0;
+
+    /// Parameter maximum \f$ t_{\max} \f$.
+    mutable Float tmax = Inf<Float>;
+
+  public:
+    constexpr Ray() noexcept = default;
+
+    constexpr Ray(
+            const Array<Float, Dim>& o, //
+            const Array<Float, Dim>& d) noexcept
+        : org(o), dir(d) {
+    }
+
+    constexpr Ray(
+            const Array<Float, Dim>& o,
+            const Array<Float, Dim>& d,
+            Float t0,
+            Float t1) noexcept
+        : org(o), dir(d), tmin(t0), tmax(t1) {
+    }
+
+  public:
+    template <typename Any>
+    constexpr bool test(const Any& any) const {
+        return RayTester<Any>(*this)(any);
+    }
+
+    template <typename Any>
+    constexpr bool test(const Any& any, Hit<Float, Dim>* hit) const {
+        return RayTester<Any>(*this)(any, hit);
+    }
+
+    constexpr bool is_in_range(Float t) const noexcept {
+        return tmin < t and t < tmax;
+    }
+
+    constexpr Array<Float, Dim> point_tmin() const noexcept {
+        return org + dir * tmin;
+    }
+
+    constexpr Array<Float, Dim> point_tmax() const noexcept {
+        return org + dir * tmax;
+    }
+
+    constexpr Array<Float, Dim> operator()(Float t) const noexcept {
+        return org + dir * t;
+    }
+};
+
+template <typename T, typename U, size_t N>
+Ray(const Array<T, N>&, const Array<U, N>&)
+        -> Ray<to_floating_point_t<T, U>, N>;
+
+template <typename T, typename U, typename V, typename W, size_t N>
+Ray(const Array<T, N>&, const Array<U, N>&, const V&, const W&)
+        -> Ray<to_floating_point_t<T, U, V, W>, N>;
+
+template <std::floating_point Float = float>
+using Ray2 = Ray<Float, 2>;
+
+template <std::floating_point Float = float>
+using Ray3 = Ray<Float, 3>;
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_RAY

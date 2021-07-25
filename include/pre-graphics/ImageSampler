@@ -1,0 +1,252 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_IMAGE_SAMPLER
+#define PRE_GRAPHICS_IMAGE_SAMPLER
+
+#include <pre-graphics/Image>
+
+namespace pre {
+
+template <concepts::image_data Data, size_t Rank, size_t Channels>
+struct ImageSampler {
+    static_assert(
+            !std::same_as<Data, std::byte> and (0 < Rank and Rank <= 3) and
+            Channels > 0);
+
+    using Float = std::conditional_t<
+            std::floating_point<Data>,
+            Data,
+            std::conditional_t<(sizeof(Data) < sizeof(float)), float, double>>;
+
+    template <typename T>
+    using Coord = Array<T, Rank>;
+
+    using Pixel = Array<Float, Channels>;
+
+    using ImageView = ArrayView<Data, Rank + 1>;
+
+    using ImageWrap = Array<Image::Wrap, Rank>;
+
+  public:
+    constexpr ImageSampler() noexcept = default;
+
+    constexpr ImageSampler(ImageView view_, ImageWrap wrap_ = {}) noexcept
+        : view(view_), wrap(wrap_) {
+    }
+
+    constexpr Pixel fetch(Coord<int> coord) const noexcept {
+        return Pixel(data(do_wrap(coord)));
+    }
+
+    constexpr void store(Coord<int> coord, Pixel pixel) noexcept {
+        std::copy(
+                pixel.begin(), //
+                pixel.end(), data(do_wrap(coord)));
+    }
+
+    constexpr Pixel linear(Coord<Float> coord) noexcept {
+        int i = 0;
+        Float u = fract(coord[0], &i);
+        Pixel f0;
+        Pixel f1;
+        if constexpr (Rank == 1) {
+            f0 = fetch({i + 0});
+            f1 = fetch({i + 1});
+        }
+        else {
+            f0 = operator[](do_wrap<0>(i + 0)).linear(*coord(Slice(1, Rank)));
+            f1 = operator[](do_wrap<0>(i + 1)).linear(*coord(Slice(1, Rank)));
+        }
+        return lerp(u, f0, f1);
+    }
+
+    template <std::invocable<Float> Func>
+    constexpr Pixel filter(
+            Coord<Float> coord, //
+            Coord<Float> width, //
+            Func&& func) noexcept {
+        Pixel fsum;
+        Float wsum = 0;
+        Float a = Float(1) / width[0];
+        Float b = coord[0];
+        int i = 0;
+        int n = fast_floor(width[0] + fract(coord[0], &i));
+        for (int k = i - n; k <= i + n; k++) {
+            Pixel f;
+            Float w = std::invoke(std::forward<Func>(func), a * (k - b));
+            if (w == 0)
+                continue;
+            if constexpr (Rank == 1)
+                f = fetch({k});
+            else
+                f = operator[](do_wrap<0>(k))
+                            .filter(*coord(Slice(1, Rank)),
+                                    *width(Slice(1, Rank)),
+                                    std::forward<Func>(func));
+            fsum += w * f;
+            wsum += w;
+        }
+        if (wsum != 0)
+            fsum /= wsum;
+        return fsum;
+    }
+
+    template <std::invocable<Float> Func>
+    constexpr void reconstruct(
+            Pixel pixel,
+            Coord<Float> coord,
+            Coord<Float> width,
+            Func&& func) noexcept {
+        Float a = Float(1) / width[0];
+        Float b = coord[0];
+        int i = 0;
+        int n = fast_floor(width[0] + fract(coord[0], &i));
+        for (int k = i - n; k <= i + n; k++) {
+            Float w = std::invoke(std::forward<Func>(func), a * (k - b));
+            if (w == 0)
+                continue;
+            if constexpr (Rank == 1)
+                store({k}, fetch({k}) + w * pixel);
+            else
+                operator[](do_wrap<0>(k))
+                        .reconstruct(
+                                w * pixel,              //
+                                *coord(Slice(1, Rank)), //
+                                *width(Slice(1, Rank)),
+                                std::forward<Func>(func));
+        }
+    }
+
+    constexpr Data* data(Coord<int> coord) noexcept {
+        return &view[ArrayIndex<Rank + 1>(coord)];
+    }
+
+    constexpr const Data* data(Coord<int> coord) const noexcept {
+        return &view[ArrayIndex<Rank + 1>(coord)];
+    }
+
+    constexpr auto operator[](int k) noexcept requires(Rank > 1) {
+        ImageSampler<Data, Rank - 1, Channels> result;
+        result.view = view[k];
+        result.wrap = *wrap(Slice(1, Rank));
+        return result;
+    }
+
+  public:
+    ImageView view = {};
+
+    ImageWrap wrap = {};
+
+    template <size_t Dim>
+    constexpr int do_wrap(int k) const noexcept {
+        int n = view.sizes[Dim];
+        switch (wrap[Dim]) {
+        default: break;
+        case Image::Wrap::Clamp:
+            k = max(k, 0);
+            k = min(k, n - 1);
+            break;
+        case Image::Wrap::Repeat: k = repeat(k, n); break;
+        case Image::Wrap::Mirror: k = mirror(k, n); break;
+        }
+        return k;
+    }
+
+    constexpr Coord<int> do_wrap(Coord<int> k) const noexcept {
+        for (size_t r = 0; r < Rank; r++) {
+            int n = view.sizes[r];
+            switch (wrap[r]) {
+            default: break;
+            case Image::Wrap::Clamp:
+                k[r] = max(k[r], 0);
+                k[r] = min(k[r], n - 1);
+                break;
+            case Image::Wrap::Repeat: k[r] = repeat(k[r], n); break;
+            case Image::Wrap::Mirror: k[r] = mirror(k[r], n); break;
+            }
+        }
+        return k;
+    }
+};
+
+/// Image filters.
+namespace image_filter {
+
+template <std::floating_point Float>
+constexpr Float rectangle(Float) noexcept {
+    return 1;
+}
+
+template <std::floating_point Float>
+constexpr Float triangle(Float u) noexcept {
+    return std::max(Float(1) - std::abs(u), Float(0));
+}
+
+template <std::floating_point Float>
+constexpr Float catmull_rom(Float u) noexcept {
+    u = 2 * std::abs(u);
+    if (2 < u)
+        return 0;
+    return u < 1 ? 1 - u * u * (-Float(1.5) * u + Float(2.5))
+                 : 2 - u * (u * (Float(0.5) * u - Float(2.5)) + 4);
+}
+
+template <std::floating_point Float>
+constexpr Float mitchell(Float u) noexcept {
+    u = 2 * std::abs(u);
+    if (2 < u)
+        return 0;
+    return u < 1 ? (16 + u * u * (21 * u - 36)) / 18
+                 : (32 + u * (-60 + u * (36 - 7 * u))) / 18;
+}
+
+} // namespace image_filter
+
+template <concepts::image_data Data, size_t Channels>
+using ImageSampler1 = ImageSampler<Data, 1, Channels>;
+
+template <concepts::image_data Data, size_t Channels>
+using ImageSampler2 = ImageSampler<Data, 2, Channels>;
+
+template <concepts::image_data Data, size_t Channels>
+using ImageSampler3 = ImageSampler<Data, 3, Channels>;
+
+template <concepts::image_data Data, size_t Channels>
+inline ImageSampler3<Data, Channels> make_sampler(Image& im) {
+    if (im.type() != Image::Type_convert<Data>() or
+        im.dims()[3] < int(Channels))
+        throw std::invalid_argument("invalid image for sampler");
+    return {im.view<Data>(), im.wrap};
+}
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_IMAGE_SAMPLER

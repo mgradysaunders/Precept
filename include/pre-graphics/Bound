@@ -1,0 +1,367 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_BOUND
+#define PRE_GRAPHICS_BOUND
+
+#include <pre-graphics/Ray>
+
+namespace pre {
+
+/// An axis-aligned bounding box.
+template <concepts::arithmetic Value, size_t Dim>
+struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
+  public:
+    using Point = Array<Value, Dim>;
+
+    constexpr Bound() noexcept = default;
+
+    constexpr Bound(const Point& point) noexcept : points{point, point} {
+    }
+
+    constexpr Bound(const Point& point0, const Point& point1) noexcept
+        : points{point0, point1} {
+    }
+
+    /// Construct as union over range.
+    template <std::input_iterator Iterator>
+    explicit constexpr Bound(Iterator from, Iterator to) noexcept {
+        while (from != to)
+            *this |= *from++;
+    }
+
+    /// Construct as union over range with custom iterator cast.
+    template <std::input_iterator Iterator, std::invocable<Iterator> Cast>
+    explicit constexpr Bound(Iterator from, Iterator to, Cast&& cast) {
+        while (from != to)
+            *this |= std::invoke(cast, from++);
+    }
+
+    template <concepts::minimal_container Container>
+    constexpr Bound(const Container& c) : Bound(c.begin(), c.end()) {
+    }
+
+  public:
+    /// \name Container API
+    /** \{ */
+
+    constexpr size_t size() const noexcept {
+        return 2;
+    }
+
+    constexpr Point* begin() noexcept {
+        return &points[0];
+    }
+
+    constexpr const Point* begin() const noexcept {
+        return &points[0];
+    }
+
+    constexpr Point* end() noexcept {
+        return &points[0] + 2;
+    }
+
+    constexpr const Point* end() const noexcept {
+        return &points[0] + 2;
+    }
+
+    /** \} */
+
+  public:
+    constexpr const Point& min() const noexcept {
+        return points[0];
+    }
+
+    constexpr const Point& max() const noexcept {
+        return points[1];
+    }
+
+    constexpr bool overlaps(const Bound& other) const noexcept {
+        return (min() <= other.max() and max() >= other.min()).all();
+    }
+
+    constexpr bool contains(const Bound& other) const noexcept {
+        return (min() <= other.min() and max() >= other.max()).all();
+    }
+
+    constexpr bool overlaps(const Point& point) const noexcept {
+        return overlaps(Bound(point));
+    }
+
+    constexpr bool contains(const Point& point) const noexcept {
+        return contains(Bound(point));
+    }
+
+    constexpr Bound expand(Value eps) const noexcept {
+        return {min() - eps, max() + eps};
+    }
+
+    constexpr Bound expand_relative(Value eps) const noexcept
+            requires std::floating_point<Value> {
+        auto cen = center();
+        auto off = (1 + eps) / 2 * extent();
+        return Bound{cen - off, cen + off};
+    }
+
+    constexpr Point extent() const noexcept {
+        return max() - min();
+    }
+
+    constexpr Point center() const noexcept {
+        return (min() + max()) / 2;
+    }
+
+    constexpr Value center(int dim) const noexcept {
+        return (min()[dim] + max()[dim]) / 2;
+    }
+
+    constexpr Point clamp(const Point& point) const noexcept {
+        return pre::clamp(point, min(), max());
+    }
+
+    /// Hyper volume.
+    ///
+    /// \note
+    /// - In 2 dimensions, this measures signed area.
+    /// - In 3 dimensions, this measures signed volume.
+    /// - ...
+    ///
+    constexpr Value volume() const noexcept {
+        return extent().prod();
+    }
+
+    /// Hyper surface area.
+    ///
+    /// \note
+    /// - In 2 dimensions, this measures signed perimeter.
+    /// - In 3 dimensions, this measures signed surface area.
+    /// - ...
+    ///
+    constexpr Value surface_area() const noexcept {
+        if constexpr (Dim == 1) {
+            return 1;
+        }
+        else {
+            Value area = 0;
+            Point dims = extent();
+            for (size_t k = 0; k < Dim; k++) {
+                Value prod = 1;
+                for (size_t j = 0; j < Dim; j++)
+                    if (j != k)
+                        prod *= dims[j];
+                area += prod;
+            }
+            return 2 * area; // Wrong for Dim = 1.
+        }
+    }
+
+    template <std::floating_point Float>
+    constexpr auto operator()(const Array<Float, Dim>& fac) const noexcept {
+        return lerp(fac, min(), max());
+    }
+
+    template <std::floating_point Float, std::floating_point... Floats>
+    constexpr auto operator()(Float fac0, Floats&&... facs) const noexcept {
+        return lerp(Array{fac0, facs...}, min(), max());
+    }
+
+  public:
+    /// \name Set operators
+    /** \{ */
+
+    constexpr Bound operator|(const Bound& other) const noexcept {
+        return {pre::min(min(), other.min()), //
+                pre::max(max(), other.max())};
+    }
+
+    constexpr Bound operator&(const Bound& other) const noexcept {
+        return {pre::max(min(), other.min()), //
+                pre::min(max(), other.max())};
+    }
+
+    constexpr Bound operator|(const Point& point) const noexcept {
+        return *this | Bound(point);
+    }
+
+    constexpr Bound operator&(const Point& point) const noexcept {
+        return *this & Bound(point);
+    }
+
+    friend constexpr Bound operator|(
+            const Point& point, const Bound& box) noexcept {
+        return Bound(point) | box;
+    }
+
+    friend constexpr Bound operator&(
+            const Point& point, const Bound& box) noexcept {
+        return Bound(point) & box;
+    }
+
+    constexpr Bound& operator|=(const auto& any) noexcept {
+        return *this = *this | any;
+    }
+
+    constexpr Bound& operator&=(const auto& any) noexcept {
+        return *this = *this & any;
+    }
+
+    /** \} */
+
+  public:
+    /// Implicit cast as bool. (Is hyper volume non-negative?)
+    constexpr operator bool() const noexcept {
+        return (min() <= max()).all();
+    }
+
+    /// Implicit cast as other.
+    template <typename Other, size_t OtherDim>
+    constexpr operator Bound<Other, OtherDim>() const noexcept {
+        return {Array<Other, OtherDim>(min()), //
+                Array<Other, OtherDim>(max())};
+    }
+
+  public:
+    Point points[2] = {Point(+Maximum<Value>), Point(-Maximum<Value>)};
+};
+
+template <typename T, size_t N>
+Bound(const Array<T, N>&) -> Bound<T, N>;
+
+template <typename T, typename U, size_t N>
+Bound(const Array<T, N>&, const Array<U, N>&)
+        -> Bound<std::common_type_t<T, U>, N>;
+
+template <typename T = float>
+using Bound1 = Bound<T, 1>;
+
+template <typename T = float>
+using Bound2 = Bound<T, 2>;
+
+template <typename T = float>
+using Bound3 = Bound<T, 3>;
+
+template <typename T = float>
+using Bound4 = Bound<T, 4>;
+
+template <std::floating_point Float, size_t Dim>
+struct RayTester<Bound<Float, Dim>> {
+  public:
+    using RayT = Ray<Float, Dim>;
+    using HitT = Hit<Float, Dim>;
+
+    constexpr RayTester(const RayT& r) noexcept
+        : ray(&r), dir_inv(1 / r.dir), dir_sgn(pre::signbit(r.dir)) {
+    }
+
+    constexpr bool operator()(const Bound<Float, Dim>& box) const noexcept {
+        const Array<Float, Dim>& org = ray->org;
+        constexpr Float tmin_fac = 1 - 2 * MachineEch<Float, 3>;
+        constexpr Float tmax_fac = 1 + 2 * MachineEch<Float, 3>;
+        auto box_min = [&](int k) { return box[dir_sgn[k]][k]; };
+        auto box_max = [&](int k) { return box[1 - dir_sgn[k]][k]; };
+        Float tmin = tmin_fac * dir_inv[0] * (box_min(0) - org[0]);
+        Float tmax = tmax_fac * dir_inv[0] * (box_max(0) - org[0]);
+        for (int k = 1; k < int(Dim); k++) {
+            Float tmink = tmin_fac * dir_inv[k] * (box_min(k) - org[k]);
+            Float tmaxk = tmax_fac * dir_inv[k] * (box_max(k) - org[k]);
+            if (not(tmin < tmaxk and tmax > tmink))
+                return false;
+            tmin = pre::max(tmin, tmink);
+            tmax = pre::min(tmax, tmaxk);
+        }
+        return tmin < ray->tmax and //
+               tmax > ray->tmin;
+    }
+
+    constexpr bool operator()(
+            const Bound<Float, Dim>& box, HitT* hit) const noexcept {
+        if (not hit)
+            return operator()(box);
+        const Array<Float, Dim>& org = ray->org;
+        constexpr Float tmin_fac = 1 - 2 * MachineEch<Float, 3>;
+        constexpr Float tmax_fac = 1 + 2 * MachineEch<Float, 3>;
+        auto box_min = [&](int k) { return box[dir_sgn[k]][k]; };
+        auto box_max = [&](int k) { return box[1 - dir_sgn[k]][k]; };
+        Float bmin = box_min(0);
+        Float bmax = box_max(0);
+        Float tmin = tmin_fac * dir_inv[0] * (bmin - org[0]);
+        Float tmax = tmax_fac * dir_inv[0] * (bmax - org[0]);
+        int kmin = 0;
+        int kmax = 0;
+        for (int k = 1; k < int(Dim); k++) {
+            Float bmink = box_min(k);
+            Float bmaxk = box_max(k);
+            Float tmink = tmin_fac * dir_inv[k] * (bmink - org[k]);
+            Float tmaxk = tmax_fac * dir_inv[k] * (bmaxk - org[k]);
+            if (not(tmin < tmaxk and tmax > tmink))
+                return false;
+            if (tmin < tmink) {
+                tmin = tmink;
+                bmin = bmink;
+                kmin = k;
+            }
+            if (tmax > tmaxk) {
+                tmax = tmaxk;
+                bmax = bmaxk;
+                kmax = k;
+            }
+        }
+        if (not(tmin < ray->tmax and //
+                tmax > ray->tmin))
+            return false;
+
+        // Initialize hit information.
+        hit->normal = {};
+        hit->u = 0;
+        hit->v = 0;
+        if (ray->is_in_range(tmin)) {
+            ray->tmax = tmin;
+            hit->point = ray->point_tmax();
+            hit->point[kmin] = bmin;
+            hit->normal[kmin] = dir_sgn[kmin] ? -1 : +1;
+        }
+        else {
+            ray->tmax = tmax;
+            hit->point = ray->point_tmax();
+            hit->point[kmax] = bmax;
+            hit->normal[kmax] = dir_sgn[kmax] ? +1 : -1;
+        }
+        return true;
+    }
+
+  public:
+    const RayT* ray = nullptr;
+    Array<Float, Dim> dir_inv = {};
+    Array<short, Dim> dir_sgn = {};
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_BOUND

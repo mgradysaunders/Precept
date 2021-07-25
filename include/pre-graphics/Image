@@ -1,0 +1,341 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_IMAGE
+#define PRE_GRAPHICS_IMAGE
+
+#include <pre/Array>
+#include <pre/Half>
+#include <pre/math>
+
+namespace pre {
+
+namespace concepts {
+
+template <typename T>
+concept image_data = arithmetic<T> or              //
+                     std::same_as<T, pre::Half> or //
+                     std::same_as<T, std::byte>;
+
+} // namespace concepts
+
+class Image {
+  public:
+    using Dims = Array<int, 4>;
+
+    enum TypeBits : int {
+        IsSize8 = 0b000001u,
+        IsSize16 = 0b000010u,
+        IsSize32 = 0b000100u,
+        IsSize64 = 0b001000u,
+        IsIntegral = 0b010000u,
+        IsUnsigned = 0b100000u,
+        SizeMask = 0b001111u
+    };
+
+    enum Type : int {
+        None = 0,
+        Sint8 = IsSize8 | IsIntegral,
+        Sint16 = IsSize16 | IsIntegral,
+        Sint32 = IsSize32 | IsIntegral,
+        Sint64 = IsSize64 | IsIntegral,
+        Uint8 = IsSize8 | IsIntegral | IsUnsigned,
+        Uint16 = IsSize16 | IsIntegral | IsUnsigned,
+        Uint32 = IsSize32 | IsIntegral | IsUnsigned,
+        Uint64 = IsSize64 | IsIntegral | IsUnsigned,
+        Float16 = IsSize16,
+        Float32 = IsSize32,
+        Float64 = IsSize64
+    };
+
+    static_assert(sizeof(float) == 4 and sizeof(double) == 8);
+
+    /// Wrap mode.
+    enum class Wrap {
+        Clamp = 0, ///< Clamp to edge
+        Repeat,    ///< Repeat forever
+        Mirror     ///< Repeat forever, mirroring each time
+    };
+
+  public:
+    Image() = default;
+
+    Image(const Image&) = default;
+
+    Image(Image&&) = default;
+
+    Image(Dims new_dims,
+          Type new_type,
+          const void* new_data = nullptr,
+          const Array<Wrap, 3>& new_wrap = {})
+        : wrap(new_wrap) {
+        resize(new_dims, new_type, new_data);
+    }
+
+    explicit Image(const std::string& filename) {
+        if (not load(filename))
+            throw std::runtime_error("failed to load \"" + filename + "\"");
+    }
+
+    Image& operator=(const Image&) = default;
+
+    Image& operator=(Image&&) = default;
+
+  public:
+    /// \name Observers
+    /** \{ */
+
+    Type type() const noexcept {
+        return type_;
+    }
+
+    Dims dims() const noexcept {
+        return dims_;
+    }
+
+    bool empty() const noexcept {
+        return data_.empty();
+    }
+
+    template <concepts::image_data Data = std::byte>
+    Data* data() noexcept {
+        return reinterpret_cast<Data*>(data_.data());
+    }
+
+    template <concepts::image_data Data = std::byte>
+    const Data* data() const noexcept {
+        return reinterpret_cast<const Data*>(data_.data());
+    }
+
+    template <concepts::image_data Data = std::byte>
+    auto view() {
+        if constexpr (std::same_as<Data, std::byte>) {
+            return ArrayView(
+                    data<Data>(), ArrayIndex(dims_).join(Type_size(type_)));
+        }
+        else {
+            if (sizeof(Data) != Type_size(type()))
+                throw std::runtime_error(
+                        "image view incompatible with data type");
+            return ArrayView( //
+                    data<Data>(), ArrayIndex(dims_));
+        }
+    }
+
+    template <typename Data = std::byte>
+    auto view() const {
+        if constexpr (std::same_as<Data, std::byte>)
+            return ArrayView<const Data, 5>(
+                    const_cast<Image&>(*this).view<Data>());
+        else
+            return ArrayView<const Data, 4>(
+                    const_cast<Image&>(*this).view<Data>());
+    }
+
+    /** \} */
+
+  public:
+    /// Clear.
+    ///
+    /// \note
+    /// This preserves type and wrapping modes.
+    ///
+    void clear() noexcept {
+        dims_ = {};
+        data_.clear();
+    }
+
+    void resize(Dims new_dims, Type new_type, const void* new_data = nullptr);
+
+    void resize(Dims new_dims);
+
+    void resample(Dims new_dims);
+
+    /// Transpose/swap given axes.
+    void transpose(int axis0, int axis1);
+
+    /// Flip on given axis.
+    void flip(int axis);
+
+    /// Turn 90 degrees counter-clockwise.
+    void turn_90_ccw() {
+        transpose(1, 2), flip(1);
+    }
+
+    /// Turn 90 degrees clockwise.
+    void turn_90_cw() {
+        transpose(1, 2), flip(2);
+    }
+
+    /// Turn 180 degrees.
+    void turn_180() {
+        flip(1), flip(2);
+    }
+
+    /// Swizzle, meaning rearrange channels.
+    void swizzle(IteratorRange<const int*> ints);
+
+    /// Swizzle, meaning rearrange channels.
+    template <std::integral... Ints>
+    void swizzle(Ints... ints) {
+        int int_array[] = {ints...};
+        swizzle(IteratorRange<const int*>(
+                &int_array[0], //
+                &int_array[0] + sizeof...(Ints)));
+    }
+
+    /// Stitch.
+    void stitch(int axis, const Image& other);
+
+    /// Cast.
+    void cast(Type new_type);
+
+    /// Packed cast.
+    void packed_cast(Type new_type);
+
+    /// Load from file.
+    bool load(const std::string& filename);
+
+    /// Save into file.
+    bool save(const std::string& filename) const;
+
+    using LoadFunction = std::function<bool(const std::string&, Image&)>;
+
+    using SaveFunction = std::function<bool(const std::string&, const Image&)>;
+
+    static std::vector<LoadFunction> load_functions;
+
+    static std::vector<SaveFunction> save_functions;
+
+    /// Register load function for use by `load()`.
+    static void register_load(const LoadFunction& func) {
+        load_functions.push_back(func);
+    }
+
+    /// Register save function for use by `save()`.
+    static void register_save(const SaveFunction& func) {
+        save_functions.push_back(func);
+    }
+
+    void swap(Image& other) noexcept {
+        std::swap(type_, other.type_);
+        std::swap(dims_, other.dims_);
+        std::swap(data_, other.data_);
+        std::swap(wrap, other.wrap);
+    }
+
+  private:
+    /// Data type.
+    Type type_ = None;
+
+    /// Data dimensions.
+    Dims dims_ = {};
+
+    /// Data.
+    std::vector<std::byte> data_ = {};
+
+  public:
+    /// Wrap modes.
+    Array<Wrap, 3> wrap = {};
+
+  public:
+    static constexpr size_t Type_size(Type type) noexcept {
+        return int(type) & SizeMask;
+    }
+
+    template <concepts::image_data T>
+    static constexpr Type Type_convert() noexcept {
+        if constexpr (std::same_as<T, std::int8_t>)
+            return Sint8;
+        else if constexpr (std::same_as<T, std::int16_t>)
+            return Sint16;
+        else if constexpr (std::same_as<T, std::int32_t>)
+            return Sint32;
+        else if constexpr (std::same_as<T, std::int64_t>)
+            return Sint64;
+        else if constexpr (std::same_as<T, std::uint8_t>)
+            return Uint8;
+        else if constexpr (std::same_as<T, std::uint16_t>)
+            return Uint16;
+        else if constexpr (std::same_as<T, std::uint32_t>)
+            return Uint32;
+        else if constexpr (std::same_as<T, std::uint64_t>)
+            return Uint64;
+        else if constexpr (std::same_as<T, Half>)
+            return Float16;
+        else if constexpr (std::same_as<T, float>)
+            return Float32;
+        else if constexpr (std::same_as<T, double>)
+            return Float64;
+        else
+            return None;
+    }
+
+    template <Type T>
+    static constexpr auto Type_convert() noexcept {
+        if constexpr (T == Sint8)
+            return std::int8_t();
+        else if constexpr (T == Sint16)
+            return std::int16_t();
+        else if constexpr (T == Sint32)
+            return std::int32_t();
+        else if constexpr (T == Sint64)
+            return std::int64_t();
+        else if constexpr (T == Uint8)
+            return std::uint8_t();
+        else if constexpr (T == Uint16)
+            return std::uint16_t();
+        else if constexpr (T == Uint32)
+            return std::uint32_t();
+        else if constexpr (T == Uint64)
+            return std::uint64_t();
+        else if constexpr (T == Float16)
+            return Half();
+        else if constexpr (T == Float32)
+            return float();
+        else if constexpr (T == Float64)
+            return double();
+    }
+
+    template <Type T>
+    using astype = std::decay_t<decltype(Type_convert<T>())>;
+
+  public:
+    void serialize(auto& serializer) {
+        serializer <=> type_;
+        serializer <=> dims_;
+        serializer <=> data_;
+        serializer <=> wrap;
+    }
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_IMAGE

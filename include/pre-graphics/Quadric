@@ -1,0 +1,128 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_QUADRIC
+#define PRE_GRAPHICS_QUADRIC
+
+#include <pre-graphics/Ray>
+
+namespace pre {
+
+template <std::floating_point Float, size_t Dim>
+struct Quadric {
+    static_assert(Dim == 2 or Dim == 3);
+
+  public:
+    using Point = Array<Float, Dim>;
+    using Vec = Array<Float, Dim>;
+    using Mat = Array<Float, Dim, Dim>;
+
+  public:
+    constexpr Quadric() noexcept = default;
+
+    constexpr void set_ellipsoid(Float radius) noexcept {
+        q = {}, q->diag() = 1 / (radius * radius);
+        r = {};
+        s = -1;
+    }
+
+    constexpr void set_ellipsoid(Vec radius) noexcept {
+        q = {}, q->diag() = **(1 / (radius * radius));
+        r = {};
+        s = -1;
+    }
+
+    constexpr Float field(Point p) const noexcept {
+        return dot(p, q, p) + dot(r, p) + s;
+    }
+
+    constexpr Vec field_gradient(Point p) const noexcept {
+        return dot(p, q + transpose(q)) + r;
+    }
+
+  public:
+    Mat q = Mat::identity();
+    Vec r = {};
+    Float s = -1;
+};
+
+template <std::floating_point Float = float>
+using Quadric2 = Quadric<Float, 2>;
+
+template <std::floating_point Float = float>
+using Quadric3 = Quadric<Float, 3>;
+
+template <std::floating_point Float, size_t Dim>
+struct RayTester<Quadric<Float, Dim>> {
+  public:
+    using RayT = Ray<Float, Dim>;
+    using HitT = Hit<Float, Dim>;
+
+    RayTester(const RayT& r) : ray(&r) {
+    }
+
+    bool operator()(const Quadric<Float, Dim>& quadric, HitT* hit = nullptr)
+            const noexcept {
+        using BigFloat = std::common_type_t<Float, double>;
+        Array<BigFloat, Dim, Dim> q = quadric.q;
+        Array<BigFloat, Dim> r = quadric.r;
+        Array<BigFloat, Dim> o = ray->org;
+        Array<BigFloat, Dim> d = ray->dir;
+        BigFloat a = dot(d, q, d);
+        BigFloat b = dot(d, q, o) * 2 + dot(r, d);
+        BigFloat c = dot(o, q, o) + dot(r, o) + quadric.s;
+        BigFloat t0 = NaN<BigFloat>;
+        BigFloat t1 = NaN<BigFloat>;
+        BigFloat t;
+        if (not quadratic(a, b, c, t0, t1))
+            return false;
+        t = t0;
+        if (not ray->is_in_range(t)) {
+            t = t1;
+            if (not ray->is_in_range(t))
+                return false;
+        }
+        if (hit) {
+            ray->tmax = t;
+            hit->point = o + t * d;
+            hit->normal = normalize(quadric.field_gradient(hit->point));
+            hit->u = 0;
+            hit->v = 0;
+        }
+        return true;
+    }
+
+  public:
+    const RayT* ray = nullptr;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_QUADRIC

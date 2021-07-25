@@ -1,0 +1,96 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_SINGLETON
+#define PRE_SINGLETON
+
+// for std::logic_error
+#include <stdexcept>
+
+namespace pre {
+
+/// A singleton interface.
+template <typename Subclass, bool AutoBootup = true>
+class Singleton {
+  public:
+    /// Bootup.
+    static void bootup() {
+        if (instance_ == nullptr) {
+            instance_ = new Subclass();
+            instance_->on_bootup();
+        }
+    }
+
+    /// Shutdown.
+    static void shutdown() {
+        if (instance_) {
+            instance_->on_shutdown();
+            delete instance_, instance_ = nullptr;
+        }
+    }
+
+    /// Get instance.
+    ///
+    /// \throw std::logic_error
+    /// If `bootup()` has not yet been called and `AutoBootup` is false.
+    ///
+    static Subclass& get() {
+        if (instance_ == nullptr) {
+            if constexpr (AutoBootup)
+                bootup();
+            else
+                throw std::logic_error("tried to get uninitialized singleton");
+        }
+        return static_cast<Subclass&>(*instance_);
+    }
+
+  protected:
+    Singleton() = default;
+
+    Singleton(const Singleton&) = delete;
+
+    virtual ~Singleton() = default;
+
+    /// On-bootup.
+    virtual void on_bootup() = 0;
+
+    /// On-shutdown.
+    virtual void on_shutdown() = 0;
+
+  private:
+    static inline Singleton* instance_ = nullptr;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_SINGLETON

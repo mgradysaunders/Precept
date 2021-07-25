@@ -1,0 +1,98 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-20 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#if !(__cplusplus >= 201709L)
+#error "Precept requires >= C++20"
+#endif // #if !(__cplusplus >= 201709L)
+#pragma once
+#ifndef PRE_TIMER
+#define PRE_TIMER
+
+// for std::int64_t
+#include <cstdint>
+
+// for std::chrono
+#include <chrono>
+
+namespace pre {
+
+/// A timer.
+///
+/// \tparam Clock
+/// A standard clock type, such as `std::chrono::system_clock`.
+///
+template <typename Clock>
+class Timer {
+  public:
+    Timer() : start_(Clock::now()) {
+    }
+
+    template <typename Rep, typename Ratio>
+    Rep read() const {
+        // clang-format off
+        return std::chrono::duration_cast<
+               std::chrono::duration<Rep, Ratio>>(Clock::now() - start_)
+                .count();
+        // clang-format on
+    }
+
+    [[gnu::always_inline]] std::int64_t nanoseconds() const {
+        return read<std::int64_t, std::nano>();
+    }
+
+    [[gnu::always_inline]] std::int64_t microseconds() const {
+        return read<std::int64_t, std::micro>();
+    }
+
+    [[gnu::always_inline]] std::int64_t milliseconds() const {
+        return read<std::int64_t, std::milli>();
+    }
+
+    [[gnu::always_inline]] double seconds() const {
+        return read<double, std::ratio<1>>();
+    }
+
+    void reset() {
+        *this = Timer();
+    }
+
+  private:
+    /// Time point at construction.
+    std::chrono::time_point<Clock> start_;
+};
+
+using SystemTimer = Timer<std::chrono::system_clock>;
+
+using SteadyTimer = Timer<std::chrono::steady_clock>;
+
+using HighResolutionTimer = Timer<std::chrono::high_resolution_clock>;
+
+} // namespace pre
+
+#endif // #ifndef PRE_TIMER
