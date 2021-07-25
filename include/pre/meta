@@ -87,8 +87,6 @@
 
 #include "_hidden/_meta/Scoped.inl"
 
-#include "_hidden/_meta/BitIterator.inl"
-
 #include "_hidden/_meta/IteratorRange.inl"
 
 #include "_hidden/_meta/ArrayLike.inl"
