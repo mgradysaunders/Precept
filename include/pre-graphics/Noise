@@ -37,102 +37,65 @@
 namespace pre {
 
 /// A simplex noise generator.
-template <std::floating_point Float, size_t Dim>
+template <std::floating_point Float, size_t N>
 struct Noise {
-    static_assert(Dim <= 16, "Probably not robust beyond 16 dimensions!");
+    static_assert(N <= 16, "Probably not robust beyond 16 dimensions!");
 
   public:
-    using Coord = Array<Float, Dim>;
-    using CoordInt = Array<int, Dim>;
-
     constexpr Noise() noexcept = default;
     constexpr Noise(std::uint32_t seed_) noexcept : seed(seed_) {
     }
 
     struct Result {
-        Float value = 0;  ///< Value in [-1, +1].
-        Coord deriv = {}; ///< Partial derivatives.
+        Float value = 0;            ///< Value in [-1, +1].
+        Array<Float, N> deriv = {}; ///< Partial derivatives.
     };
+    template <std::floating_point... Floats>
+    Result operator()(Floats... t) const noexcept {
+        static_assert(sizeof...(Floats) == N);
+        return operator()(Array{t...});
+    }
 
-    Result operator()(const Coord& t) const noexcept;
+    Result operator()(Array<Float, N> t) const noexcept {
+        static const Float f = (1.0 / N) * (pre::sqrt(1.0 + N) - 1.0);
+        static const Float g = (1.0 / N) * (1.0 - 1.0 / pre::sqrt(1.0 + N));
+        Array<Float, N> skew = t + f * t.sum();
+        Array<int, N> skew0 = fast_floor(skew);
+        skew -= skew0;
+        int skew0_sum = skew0.sum();
+        Array<int, N> skew_index = skew0;
+        Array<int, N> skew_order = skew.sorted_indexes().reversed();
+        Result result;
+        for (int k = 0; k <= int(N); k++) {
+            Array<Float, N> corner = skew_index - g * (skew0_sum + k);
+            Array<Float, N> offset = t - corner;
+            if (Float env = Float(0.5) - dot(offset, offset); env > 0) {
+                Pcg32 rand(seed, cantor(skew_index));
+                Array<Float, N> grad(rand, [](auto& rand) {
+                    return (Float(2) / Float(15)) * rand(16) - Float(1);
+                });
+                Float proj = dot(grad, offset);
+                Float env2 = env * env;
+                result.value += env2 * proj;
+                result.deriv += env2 * grad - 4 * env * proj * offset;
+            }
+            if (k < int(N))
+                ++skew_index[skew_order[k]];
+        }
+        result.value *= 20;
+        result.deriv *= 20;
+        if (pre::abs(result.value) > Float(0.5)) {
+            Float sat = pre::exp(1 - 2 * pre::abs(result.value));
+            result.value =
+                    pre::copysign(Float(1), result.value) * (1 - sat / 2);
+            result.deriv *= sat;
+        }
+        return result;
+    }
 
   public:
     std::uint32_t seed = 0;
 };
-
-template <std::floating_point Float, size_t Dim>
-inline typename Noise<Float, Dim>::Result Noise<Float, Dim>::operator()(
-        const Coord& t) const noexcept {
-
-    // Skew, shift into [0, 1)^2.
-    static const Float f = (1.0 / Dim) * (pre::sqrt(Dim + 1) - 1);
-    static const Float g = (1.0 / Dim) * (1 - 1 / pre::sqrt(Dim + 1));
-    Coord tskew = t + f * t.sum();
-    CoordInt tskew0 = fast_floor(tskew);
-    tskew -= tskew0;
-
-    // Determine decreasing order of coordinate values.
-    CoordInt reorder = {};
-    if constexpr (Dim == 2) {
-        reorder = {0, 1};
-        if (tskew[0] < tskew[1])
-            reorder = {1, 0};
-    }
-    else if constexpr (Dim > 2) {
-        using FloatInt = std::pair<Float, int>;
-        FloatInt pairs[Dim];
-        for (size_t k = 0; k < Dim; k++)
-            pairs[k] = FloatInt(tskew[k], int(k));
-        std::sort(
-                &pairs[0],       //
-                &pairs[0] + Dim, //
-                [](const FloatInt& lhs, const FloatInt& rhs) {
-                    return lhs.first > rhs.first;
-                });
-        for (size_t k = 0; k < Dim; k++)
-            reorder[k] = pairs[k].second;
-    }
-
-    // Gradient calculator.
-    auto gradient = [this](const CoordInt& loc) {
-        int stream = loc[0];
-        for (size_t k = 1; k < Dim; k++)
-            stream = cantor(stream, loc[k]);
-        Coord grad;
-        Pcg32 gen(seed, stream);
-        for (size_t k = 0; k < Dim; k++)
-            grad[k] = (2 / Float(15)) * gen(16) - 1;
-        return grad;
-    };
-
-    // Add terms.
-    Coord ver0 = tskew0 - g * tskew0.sum();
-    CoordInt off = {};
-    Result result;
-    for (size_t k = 0; k <= Dim; k++) {
-        Coord ver = ver0 + off - g * k;
-        Coord sep = t - ver;
-        Float env = Float(0.5) - dot(sep, sep);
-        if (env > 0) {
-            Coord grad = gradient(tskew0 + off);
-            Float proj = dot(grad, sep);
-            result.value += (env * env) * proj;
-            result.deriv += (env * env) * grad - (4 * env * proj) * sep;
-        }
-        if (k < Dim)
-            off[reorder[k]]++;
-    }
-
-    // Apply gain and exponential saturation.
-    result.value *= 20;
-    result.deriv *= 20;
-    if (pre::abs(result.value) > Float(0.5)) {
-        Float sat = pre::exp(1 - 2 * pre::abs(result.value));
-        result.value = pre::copysign(Float(1), result.value) * (1 - sat / 2);
-        result.deriv *= sat;
-    }
-    return result;
-}
 
 template <std::floating_point Float = float>
 using Noise1 = Noise<Float, 1>;

@@ -7,14 +7,18 @@ namespace pre {
 /** \{ */
 
 /// Analogous to `std::min()`, except only for numbers.
-template <concepts::arithmetic_or_enum T, concepts::arithmetic_or_enum U>
-constexpr auto min(T x, U y) noexcept {
+template <
+        concepts::arithmetic_or_enum Arith0,
+        concepts::arithmetic_or_enum Arith1>
+constexpr auto min(Arith0 x, Arith1 y) noexcept {
     return x < y ? x : y;
 }
 
 /// Analogous to `std::max()`, except only for numbers.
-template <concepts::arithmetic_or_enum T, concepts::arithmetic_or_enum U>
-constexpr auto max(T x, U y) noexcept {
+template <
+        concepts::arithmetic_or_enum Arith0,
+        concepts::arithmetic_or_enum Arith1>
+constexpr auto max(Arith0 x, Arith1 y) noexcept {
     return x < y ? y : x;
 }
 
@@ -24,9 +28,11 @@ constexpr auto max(T x, U y) noexcept {
 /// \param[in] a  Range minimum.
 /// \param[in] b  Range maximum.
 ///
-template <concepts::arithmetic_or_enum T>
-constexpr T clamp(
-        T x, std::type_identity_t<T> a, std::type_identity_t<T> b) noexcept {
+template <concepts::arithmetic_or_enum Arith>
+constexpr Arith clamp(
+        Arith x,
+        std::type_identity_t<Arith> a,
+        std::type_identity_t<Arith> b) noexcept {
     return pre::min(pre::max(x, a), b);
 }
 
@@ -35,19 +41,19 @@ constexpr T clamp(
 /// \param[in] x  Value.
 /// \param[in] b  Range maximum.
 ///
-template <concepts::arithmetic_or_enum T>
-constexpr T clamp_abs(T x, std::type_identity_t<T> b) noexcept {
-    return clamp(x, -b, b);
+template <concepts::arithmetic_or_enum Arith>
+constexpr Arith clamp_abs(Arith x, std::type_identity_t<Arith> b) noexcept {
+    return clamp<Arith>(x, -b, +b);
 }
 
 /// Raise to integer power.
-template <concepts::arithmetic T>
-constexpr T nthpow(T x, int n) noexcept {
+template <concepts::arithmetic Arith>
+constexpr Arith nthpow(Arith x, int n) noexcept {
     if (n < 0) {
-        return T(1) / nthpow(x, -n);
+        return Arith(1) / nthpow(x, -n);
     }
     else {
-        T y = 1;
+        Arith y = 1;
         while (1) {
             if (n & 1)
                 y *= x;
@@ -60,6 +66,7 @@ constexpr T nthpow(T x, int n) noexcept {
     }
 }
 
+#if 0
 /// Chain-assign variables.
 ///
 /// \note
@@ -86,6 +93,7 @@ constexpr void cycle_assign(T& a, U& b, V&... c) noexcept {
     T t = std::move(a);
     chain_assign(a, b, c..., t);
 }
+#endif
 
 /** \} */
 
@@ -101,23 +109,23 @@ constexpr void cycle_assign(T& a, U& b, V&... c) noexcept {
 /// For \f$ k > 0 \f$, \f$ n > 0 \f$, this operation is
 /// equivalent to \f$ k \% n \f$.
 ///
-template <std::integral T>
-constexpr T repeat(T k, T n) noexcept {
-    if constexpr (std::unsigned_integral<T>) {
+template <std::integral Int>
+constexpr Int repeat(Int k, Int n) noexcept {
+    if constexpr (std::unsigned_integral<Int>) {
         return k % n;
     }
     else {
-        if (n < T(0)) {
+        if (n < Int(0)) {
             return -repeat(-k, -n);
         }
         else {
-            if (k >= T(0)) {
+            if (k >= Int(0)) {
                 return k % n;
             }
             else {
                 k = n + k % n;
                 if (k == n) {
-                    k = T(0);
+                    k = Int(0);
                 }
                 return k;
             }
@@ -130,40 +138,40 @@ constexpr T repeat(T k, T n) noexcept {
 /// - If \f$ n > 0 \f$, wrap \f$ k \f$ to \f$ [0, n) \f$.
 /// - If \f$ n < 0 \f$, wrap \f$ k \f$ to \f$ (n, 0] \f$.
 ///
-template <std::integral T>
-constexpr T mirror(T k, T n) noexcept {
-    if (n < T(0)) {
+template <std::integral Int>
+constexpr Int mirror(Int k, Int n) noexcept {
+    if (n < Int(0)) {
         return -mirror(-k, -n);
     }
     else {
-        T r = k % n;
-        T q = k / n;
-        if (r < T(0)) {
+        Int r = k % n;
+        Int q = k / n;
+        if (r < Int(0)) {
             r += n;
             q++;
         }
-        if (q & T(1)) {
-            r = n - r - T(1);
+        if (q & Int(1)) {
+            r = n - r - Int(1);
         }
         return r;
     }
 }
 
 /// Is power of 2?
-template <std::integral T>
-constexpr bool ispow2(T n) noexcept {
+template <std::integral Int>
+constexpr bool ispow2(Int n) noexcept {
     return n > 0 && (n & (n - 1)) == 0;
 }
 
 /// Round up to power of 2.
-template <std::integral T>
-constexpr T roundpow2(T n) noexcept {
+template <std::integral Int>
+constexpr Int roundpow2(Int n) noexcept {
     if (n <= 0) {
         return 1;
     }
     else {
         n--;
-        T p = 1;
+        Int p = 1;
         while (n) {
             n >>= 1;
             p <<= 1;
@@ -182,20 +190,20 @@ constexpr T roundpow2(T n) noexcept {
 /// Uses [`__builtin_ctz`][1] when compiling with GCC.
 /// [1]: https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
 ///
-template <std::integral T>
-constexpr T first1(T n) noexcept {
+template <std::integral Int>
+constexpr Int first1(Int n) noexcept {
     if (n == 0)
         return 0; // Error?
 #if __GNUC__
-    if constexpr (sizeof(T) <= sizeof(int))
+    if constexpr (sizeof(Int) <= sizeof(int))
         return __builtin_ctz(n);
-    else if constexpr (sizeof(T) == sizeof(long))
+    else if constexpr (sizeof(Int) == sizeof(long))
         return __builtin_ctzl(n);
-    else if constexpr (sizeof(T) == sizeof(long long))
+    else if constexpr (sizeof(Int) == sizeof(long long))
         return __builtin_ctzll(n);
 #endif // #if __GNUC__
 
-    T j = 0;
+    Int j = 0;
     while (!(n & 1)) {
         n >>= 1;
         j++;
@@ -204,37 +212,37 @@ constexpr T first1(T n) noexcept {
 }
 
 /// Cyclical bit rotate left.
-template <std::integral T>
-constexpr T rotl(T val, unsigned rot) noexcept {
-    return (val << rot) | (val >> ((-rot) & (sizeof(T) * 8 - 1)));
+template <std::integral Int>
+constexpr Int rotl(Int val, unsigned rot) noexcept {
+    return (val << rot) | (val >> ((-rot) & (sizeof(Int) * 8 - 1)));
 }
 
 /// Cyclical bit rotate right.
-template <std::integral T>
-constexpr T rotr(T val, unsigned rot) noexcept {
-    return (val >> rot) | (val << ((-rot) & (sizeof(T) * 8 - 1)));
+template <std::integral Int>
+constexpr Int rotr(Int val, unsigned rot) noexcept {
+    return (val >> rot) | (val << ((-rot) & (sizeof(Int) * 8 - 1)));
 }
 
 /// Bit swap.
-template <std::integral T>
-constexpr T bit_swap(T val, int pos0, int pos1) noexcept {
-    T mask = ((val >> pos0) ^ (val >> pos1)) & 1;
+template <std::integral Int>
+constexpr Int bit_swap(Int val, int pos0, int pos1) noexcept {
+    Int mask = ((val >> pos0) ^ (val >> pos1)) & 1;
     return ((mask << pos0) | (mask << pos1)) ^ val;
 }
 
 /// Bit reverse.
-template <std::integral T>
-constexpr T bit_reverse(T val) noexcept {
-    if constexpr (std::signed_integral<T>) {
-        return bit_reverse<std::make_unsigned_t<T>>(val);
+template <std::integral Int>
+constexpr Int bit_reverse(Int val) noexcept {
+    if constexpr (std::signed_integral<Int>) {
+        return bit_reverse<std::make_unsigned_t<Int>>(val);
     }
-    else if constexpr (sizeof(T) == sizeof(std::uint8_t)) {
+    else if constexpr (sizeof(Int) == sizeof(std::uint8_t)) {
         constexpr std::uint8_t mask[3] = {0xaaU, 0xccU, 0xf0U};
         for (int k = 0; k < 3; k++)
             val = ((val & mask[k]) >> (1 << k)) |
                   ((val & ~mask[k]) << (1 << k));
     }
-    else if constexpr (sizeof(T) == sizeof(std::uint16_t)) {
+    else if constexpr (sizeof(Int) == sizeof(std::uint16_t)) {
         constexpr std::uint16_t mask[4] = {0xaaaaU, 0xccccU, 0xf0f0U, 0xff00U};
 #if __GNUC__
         val = __builtin_bswap16(val);
@@ -245,7 +253,7 @@ constexpr T bit_reverse(T val) noexcept {
             val = ((val & mask[k]) >> (1 << k)) |
                   ((val & ~mask[k]) << (1 << k));
     }
-    else if constexpr (sizeof(T) == sizeof(std::uint32_t)) {
+    else if constexpr (sizeof(Int) == sizeof(std::uint32_t)) {
         constexpr std::uint32_t mask[5] = {
                 0xaaaaaaaaUL, 0xccccccccUL, 0xf0f0f0f0UL, 0xff00ff00UL,
                 0xffff0000UL};
@@ -258,7 +266,7 @@ constexpr T bit_reverse(T val) noexcept {
             val = ((val & mask[k]) >> (1 << k)) |
                   ((val & ~mask[k]) << (1 << k));
     }
-    else if constexpr (sizeof(T) == sizeof(std::uint64_t)) {
+    else if constexpr (sizeof(Int) == sizeof(std::uint64_t)) {
         constexpr std::uint64_t mask[6] = {
                 0xaaaaaaaaaaaaaaaaULL, 0xccccccccccccccccULL,
                 0xf0f0f0f0f0f0f0f0ULL, 0xff00ff00ff00ff00ULL,
@@ -272,36 +280,34 @@ constexpr T bit_reverse(T val) noexcept {
             val = ((val & mask[k]) >> (1 << k)) |
                   ((val & ~mask[k]) << (1 << k));
     }
-    else {
-        // Error.
-    }
     return val;
 }
 
 // Bit interleave with zero.
-template <std::integral T>
-constexpr T bit_interleave_zero(T val) noexcept {
-    if constexpr (std::signed_integral<T>) {
-        return bit_interleave_zero<std::make_unsigned_t<T>>(val);
+template <std::integral Int>
+constexpr Int bit_interleave_zero(Int val) noexcept {
+    if constexpr (std::signed_integral<Int>) {
+        return bit_interleave_zero<std::make_unsigned_t<Int>>(val);
     }
-    else if constexpr (sizeof(T) == sizeof(std::uint8_t)) {
+    else if constexpr (sizeof(Int) == sizeof(std::uint8_t)) {
         constexpr std::uint8_t mask[3] = {0xaaU, 0xccU, 0xf0U};
         for (int k = 2; k >= 0; k--)
             val = (val ^ (val << (1 << k))) & ~mask[k];
     }
-    else if constexpr (sizeof(T) == sizeof(std::uint16_t)) {
+    else if constexpr (sizeof(Int) == sizeof(std::uint16_t)) {
         constexpr std::uint16_t mask[4] = {0xaaaaU, 0xccccU, 0xf0f0U, 0xff00U};
         for (int k = 3; k >= 0; k--)
             val = (val ^ (val << (1 << k))) & ~mask[k];
     }
-    else if constexpr (sizeof(T) == sizeof(std::uint32_t)) {
+    else if constexpr (sizeof(Int) == sizeof(std::uint32_t)) {
         constexpr std::uint32_t mask[5] = {
-                0xaaaaaaaaUL, 0xccccccccUL, 0xf0f0f0f0UL, 0xff00ff00UL,
+                0xaaaaaaaaUL, 0xccccccccUL, //
+                0xf0f0f0f0UL, 0xff00ff00UL, //
                 0xffff0000UL};
         for (int k = 4; k >= 0; k--)
             val = (val ^ (val << (1 << k))) & ~mask[k];
     }
-    else if constexpr (sizeof(T) == sizeof(std::uint64_t)) {
+    else if constexpr (sizeof(Int) == sizeof(std::uint64_t)) {
         constexpr std::uint64_t mask[6] = {
                 0xaaaaaaaaaaaaaaaaULL, 0xccccccccccccccccULL,
                 0xf0f0f0f0f0f0f0f0ULL, 0xff00ff00ff00ff00ULL,
@@ -324,8 +330,8 @@ constexpr T bit_interleave_zero(T val) noexcept {
 /// \f$ 2^{n - 1} \f$ bits of the input integers do not appear in
 /// the output.
 ///
-template <std::integral T>
-constexpr T bit_interleave(T val0, T val1) noexcept {
+template <std::integral Int>
+constexpr Int bit_interleave(Int val0, Int val1) noexcept {
     val0 = bit_interleave_zero(val0);
     val1 = bit_interleave_zero(val1);
     return val0 | (val1 << 1);
@@ -345,20 +351,20 @@ constexpr T bit_interleave(T val0, T val1) noexcept {
 /// This routine calculates \f$ n^2 M_{i,j} \f$, which is always an
 /// integer.
 ///
-template <std::size_t B, std::integral T>
-constexpr T bayer_index(T i, T j) noexcept {
+template <std::size_t B, std::integral Int>
+constexpr Int bayer_index(Int i, Int j) noexcept {
     static_assert(B > 0, "B must be greater than 0");
-    static_assert(sizeof(T) * 8 > B * 2, "T does not have enough bits");
+    static_assert(sizeof(Int) * 8 > B * 2, "Int does not have enough bits");
     i = i & ((1 << B) - 1);
     j = j & ((1 << B) - 1);
-    return bit_reverse<T>(bit_interleave<T>(j ^ i, i)) >>
-           (sizeof(T) * 8 - B * 2);
+    return bit_reverse<Int>(bit_interleave<Int>(j ^ i, i)) >>
+           (sizeof(Int) * 8 - B * 2);
 }
 
 /// Greatest common divisor.
-template <std::integral T>
-constexpr T gcd(T a, T b) noexcept {
-    T r = 0;
+template <std::integral Int>
+constexpr Int gcd(Int a, Int b) noexcept {
+    Int r = 0;
     while (a) {
         r = b % a;
         b = a;
@@ -368,14 +374,14 @@ constexpr T gcd(T a, T b) noexcept {
 }
 
 /// Greatest common divisor with Bezout coefficients.
-template <std::integral T>
-constexpr T gcd_bezout(T a, T b, T* x, T* y) noexcept {
-    T s1 = 0, s0 = 1;
-    T t1 = 1, t0 = 0;
-    T r1 = b, r0 = a;
+template <std::integral Int>
+constexpr Int gcd_bezout(Int a, Int b, Int* x, Int* y) noexcept {
+    Int s1 = 0, s0 = 1;
+    Int t1 = 1, t0 = 0;
+    Int r1 = b, r0 = a;
     while (r1 != 0) {
-        T q = r0 / r1;
-        T k;
+        Int q = r0 / r1;
+        Int k;
         k = r1, r1 = r0 - q * r1, r0 = k;
         k = s1, s1 = s0 - q * s1, s0 = k;
         k = t1, t1 = t0 - q * t1, t0 = k;
@@ -388,8 +394,8 @@ constexpr T gcd_bezout(T a, T b, T* x, T* y) noexcept {
 }
 
 /// Least common multiple.
-template <std::integral T>
-constexpr T lcm(T a, T b) noexcept {
+template <std::integral Int>
+constexpr Int lcm(Int a, Int b) noexcept {
     if (!a || !b)
         return 0;
     else
@@ -403,15 +409,15 @@ constexpr T lcm(T a, T b) noexcept {
 ///     \frac{1}{2}(x + y)(x + y + 1) + y
 /// \f]
 ///
-template <std::integral T>
-constexpr T cantor(T x, T y) noexcept {
-    if constexpr (!std::unsigned_integral<T>) {
+template <std::integral Int>
+constexpr Int cantor(Int x, Int y) noexcept {
+    if constexpr (!std::unsigned_integral<Int>) {
         // Natural numbers.
-        std::make_unsigned_t<T> xn = std::abs(x);
-        std::make_unsigned_t<T> yn = std::abs(y);
+        std::make_unsigned_t<Int> xn = std::abs(x);
+        std::make_unsigned_t<Int> yn = std::abs(y);
         xn = 2 * xn - (x > 0);
         yn = 2 * yn - (y > 0);
-        return T(cantor(xn, yn));
+        return Int(cantor(xn, yn));
     }
     else {
         return ((x + y) * (x + y + 1)) / 2 + y;
@@ -424,9 +430,19 @@ constexpr T cantor(T x, T y) noexcept {
 ///      \pi(x, y, z, \ldots) = \pi(\pi(x, y), z, \ldots)
 /// \f]
 ///
-template <std::integral T, std::integral... Ts>
-[[gnu::always_inline]] constexpr T cantor(T x, T y, T z, Ts... ws) noexcept {
+template <std::integral Int, std::integral... Ints>
+constexpr Int cantor(Int x, Int y, Int z, Ints... ws) noexcept {
     return cantor(cantor(x, y), z, ws...);
+}
+
+template <std::ranges::range Ints>
+constexpr auto cantor(const Ints& ints) noexcept {
+    using Int = std::ranges::range_value_t<Ints>;
+    Int c = 0;
+    for (Int x : ints)
+        c = cantor(c, x);
+    return c;
+    static_assert(std::integral<Int>);
 }
 
 /** \} */
@@ -649,8 +665,8 @@ constexpr Float fract(Float x, int* i = nullptr) noexcept {
 }
 
 /// Calculate `sin` and `cos`, return as pair.
-template <concepts::arithmetic T>
-inline auto sincos(T x) noexcept {
+template <concepts::arithmetic Arith>
+inline auto sincos(Arith x) noexcept {
     // On GCC, could manually call __builtin_sincos, but this should
     // be optimizable as is.
     return std::make_pair(std::sin(x), std::cos(x));
@@ -663,11 +679,11 @@ inline auto sincos(T x) noexcept {
 /// exploits periodicity, using `remquo()` before multiplying by
 /// \f$ \pi \f$ to be more accurate for large arguments.
 ///
-template <std::floating_point T>
-inline T sinpi(T x) noexcept {
+template <std::floating_point Float>
+inline Float sinpi(Float x) noexcept {
     int quo;
-    T rem = pre::remquo(x, T(1), &quo);
-    T res = pre::sin(pre::numeric_constants<T>::M_pi() * rem);
+    Float rem = pre::remquo(x, Float(1), &quo);
+    Float res = pre::sin(pre::numeric_constants<Float>::M_pi() * rem);
     if (unsigned(quo) & 1) {
         res = -res;
     }
@@ -681,11 +697,11 @@ inline T sinpi(T x) noexcept {
 /// exploits periodicity using `remquo()` before multiplying by
 /// \f$ \pi \f$ to be more accurate for large arguments.
 ///
-template <std::floating_point T>
-inline T cospi(T x) noexcept {
+template <std::floating_point Float>
+inline Float cospi(Float x) noexcept {
     int quo;
-    T rem = pre::remquo(x, T(1), &quo);
-    T res = pre::cos(pre::numeric_constants<T>::M_pi() * rem);
+    Float rem = pre::remquo(x, Float(1), &quo);
+    Float res = pre::cos(pre::numeric_constants<Float>::M_pi() * rem);
     if (unsigned(quo) & 1) {
         res = -res;
     }
@@ -693,8 +709,8 @@ inline T cospi(T x) noexcept {
 }
 
 /// Find minimum value of `sinpi()` on interval.
-template <std::floating_point T>
-inline T sinpi_min(T x1, T x2) noexcept {
+template <std::floating_point Float>
+inline Float sinpi_min(Float x1, Float x2) noexcept {
     if (!(x1 < x2)) {
         std::swap(x1, x2);
     }
@@ -725,8 +741,8 @@ inline T sinpi_min(T x1, T x2) noexcept {
 }
 
 /// Find maximum value of `sinpi()` on interval.
-template <std::floating_point T>
-inline T sinpi_max(T x1, T x2) noexcept {
+template <std::floating_point Float>
+inline Float sinpi_max(Float x1, Float x2) noexcept {
     if (!(x1 < x2)) {
         std::swap(x1, x2);
     }
@@ -757,11 +773,12 @@ inline T sinpi_max(T x1, T x2) noexcept {
 }
 
 /// Calculate `sinpi` and `cospi`, return as pair.
-template <std::floating_point T>
-inline auto sincospi(T x) noexcept {
+template <std::floating_point Float>
+inline auto sincospi(Float x) noexcept {
     int quo;
-    T rem = pre::remquo(x, T(1), &quo);
-    auto [sinx, cosx] = pre::sincos(pre::numeric_constants<T>::M_pi() * rem);
+    Float rem = pre::remquo(x, Float(1), &quo);
+    auto [sinx, cosx] =
+            pre::sincos(pre::numeric_constants<Float>::M_pi() * rem);
     if (unsigned(quo) & 1) {
         sinx = -sinx;
         cosx = -cosx;
@@ -770,38 +787,39 @@ inline auto sincospi(T x) noexcept {
 }
 
 /// Error function inverse.
-template <std::floating_point T>
-inline T erfinv(T y) noexcept {
-    T w = -pre::log((1 - y) * (1 + y));
-    T p;
-    if (w < T(5)) {
-        w = w - T(2.5);
-        p = pre::fma(w, T(+2.81022636e-08), T(+3.43273939e-7));
-        p = pre::fma(w, p, T(-3.52338770e-6));
-        p = pre::fma(w, p, T(-4.39150654e-6));
-        p = pre::fma(w, p, T(+2.18580870e-4));
-        p = pre::fma(w, p, T(-1.25372503e-3));
-        p = pre::fma(w, p, T(-4.17768164e-3));
-        p = pre::fma(w, p, T(+2.46640727e-1));
-        p = pre::fma(w, p, T(+1.50140941));
+template <std::floating_point Float>
+inline Float erfinv(Float y) noexcept {
+    Float w = -pre::log((1 - y) * (1 + y));
+    Float p;
+    if (w < Float(5)) {
+        w = w - Float(2.5);
+        p = pre::fma(w, Float(+2.81022636e-08), Float(+3.43273939e-7));
+        p = pre::fma(w, p, Float(-3.52338770e-6));
+        p = pre::fma(w, p, Float(-4.39150654e-6));
+        p = pre::fma(w, p, Float(+2.18580870e-4));
+        p = pre::fma(w, p, Float(-1.25372503e-3));
+        p = pre::fma(w, p, Float(-4.17768164e-3));
+        p = pre::fma(w, p, Float(+2.46640727e-1));
+        p = pre::fma(w, p, Float(+1.50140941));
     }
     else {
         w = pre::sqrt(w) - 3;
-        p = pre::fma(w, T(-2.00214257e-4), T(+1.00950558e-4));
-        p = pre::fma(w, p, T(+1.34934322e-3));
-        p = pre::fma(w, p, T(-3.67342844e-3));
-        p = pre::fma(w, p, T(+5.73950773e-3));
-        p = pre::fma(w, p, T(-7.62246130e-3));
-        p = pre::fma(w, p, T(+9.43887047e-3));
-        p = pre::fma(w, p, T(+1.00167406));
-        p = pre::fma(w, p, T(+2.83297682));
+        p = pre::fma(w, Float(-2.00214257e-4), Float(+1.00950558e-4));
+        p = pre::fma(w, p, Float(+1.34934322e-3));
+        p = pre::fma(w, p, Float(-3.67342844e-3));
+        p = pre::fma(w, p, Float(+5.73950773e-3));
+        p = pre::fma(w, p, Float(-7.62246130e-3));
+        p = pre::fma(w, p, Float(+9.43887047e-3));
+        p = pre::fma(w, p, Float(+1.00167406));
+        p = pre::fma(w, p, Float(+2.83297682));
     }
     return p * y;
 }
 
 /// Quadratic roots.
-template <std::floating_point T>
-inline bool quadratic(T a, T b, T c, T& x0, T& x1) noexcept {
+template <std::floating_point Float>
+inline bool quadratic(
+        Float a, Float b, Float c, Float& x0, Float& x1) noexcept {
     if (relatively_tiny(a, b)) {
         x0 = x1 = -c / b;
         return std::isfinite(x0);
@@ -812,12 +830,12 @@ inline bool quadratic(T a, T b, T c, T& x0, T& x1) noexcept {
         if (not std::isfinite(b) or //
             not std::isfinite(c))
             return false;
-        T d = b * b - 4 * c;
+        Float d = b * b - 4 * c;
         if (not std::isfinite(d))
             d = b * (b - 4 * (c / b)); // Try again
         if (not std::isfinite(d) or d < 0)
             return false;
-        x0 = -T(0.5) * (b + std::copysign(std::sqrt(d), b));
+        x0 = -Float(0.5) * (b + std::copysign(std::sqrt(d), b));
         x1 = c / x0;
         if (x0 > x1)
             std::swap(x0, x1);

@@ -31,6 +31,7 @@
 #ifndef PRE_GRAPHICS_IMAGE
 #define PRE_GRAPHICS_IMAGE
 
+#include <numeric>
 #include <pre/Array>
 #include <pre/Half>
 #include <pre/math>
@@ -209,6 +210,7 @@ class Image {
         swizzle(IteratorRange<const int*>(
                 &int_array[0], //
                 &int_array[0] + sizeof...(Ints)));
+        static_assert(sizeof...(Ints) > 0);
     }
 
     /// Stitch.
@@ -219,6 +221,48 @@ class Image {
 
     /// Packed cast.
     void packed_cast(Type new_type);
+
+    /// sRGB encode channels.
+    void srgb_encode(IteratorRange<const int*> ints);
+
+    /// sRGB decode channels.
+    void srgb_decode(IteratorRange<const int*> ints);
+
+    /// sRGB encode channels (all channels if no arguments).
+    template <std::integral... Ints>
+    void srgb_encode(Ints... ints) {
+        if constexpr (sizeof...(Ints) == 0) {
+            std::vector<int> int_array(dims_[3]);
+            std::iota(int_array.begin(), int_array.end(), 0);
+            srgb_encode(IteratorRange<const int*>(
+                    int_array.data(), //
+                    int_array.data() + int_array.size()));
+        }
+        else {
+            int int_array[] = {ints...};
+            srgb_encode(IteratorRange<const int*>(
+                    &int_array[0], //
+                    &int_array[0] + sizeof...(Ints)));
+        }
+    }
+
+    /// sRGB decode channels (all channels if no arguments).
+    template <std::integral... Ints>
+    void srgb_decode(Ints... ints) {
+        if constexpr (sizeof...(Ints) == 0) {
+            std::vector<int> int_array(dims_[3]);
+            std::iota(int_array.begin(), int_array.end(), 0);
+            srgb_decode(IteratorRange<const int*>(
+                    int_array.data(), //
+                    int_array.data() + int_array.size()));
+        }
+        else {
+            int int_array[] = {ints...};
+            srgb_decode(IteratorRange<const int*>(
+                    &int_array[0], //
+                    &int_array[0] + sizeof...(Ints)));
+        }
+    }
 
     /// Load from file.
     bool load(const std::string& filename);
@@ -322,6 +366,14 @@ class Image {
             return float();
         else if constexpr (T == Float64)
             return double();
+    }
+
+    static constexpr Type Type_best_float(Type type) noexcept {
+        if (type == Float16)
+            return Float32;
+        if (type & IsIntegral)
+            return Type_size(type) < sizeof(float) ? Float32 : Float64;
+        return type;
     }
 
     template <Type T>

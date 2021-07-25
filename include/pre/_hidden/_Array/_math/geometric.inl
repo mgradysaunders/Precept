@@ -15,8 +15,8 @@ namespace pre {
 ///      \end{bmatrix}
 /// \f]
 ///
-template <typename T>
-constexpr Array<T, 2> cross(const Array<T, 2>& arr) noexcept {
+template <typename Arith>
+constexpr Array<Arith, 2> cross(const Array<Arith, 2>& arr) noexcept {
     return {arr[1], -arr[0]};
 }
 
@@ -30,9 +30,9 @@ constexpr Array<T, 2> cross(const Array<T, 2>& arr) noexcept {
 ///      x_{0[1]} x_{1[0]}
 /// \f]
 ///
-template <typename T, typename U>
+template <typename Arith0, typename Arith1>
 constexpr auto cross(
-        const Array<T, 2>& arr0, const Array<U, 2>& arr1) noexcept {
+        const Array<Arith0, 2>& arr0, const Array<Arith1, 2>& arr1) noexcept {
     return dot(arr0, cross(arr1));
 }
 
@@ -49,11 +49,11 @@ constexpr auto cross(
 ///      \end{bmatrix}
 /// \f]
 ///
-template <typename T>
-constexpr Array<T, 3, 3> cross(const Array<T, 3>& arr) noexcept {
-    return {T(0),    -arr[2], +arr[1], //
-            +arr[2], T(0),    -arr[0], //
-            -arr[1], +arr[0], T(0)};
+template <typename Arith>
+constexpr Array<Arith, 3, 3> cross(const Array<Arith, 3>& arr) noexcept {
+    return {Arith(), -arr[2], +arr[1], //
+            +arr[2], Arith(), -arr[0], //
+            -arr[1], +arr[0], Arith()};
 }
 
 /// 3-dimensional cross product.
@@ -69,10 +69,10 @@ constexpr Array<T, 3, 3> cross(const Array<T, 3>& arr) noexcept {
 ///      \end{bmatrix}
 /// \f]
 ///
-template <typename T, typename U>
+template <typename Arith0, typename Arith1>
 constexpr auto cross(
-        const Array<T, 3>& arr0, const Array<U, 3>& arr1) noexcept {
-    return Array<decltype(T() * U()), 3>{
+        const Array<Arith0, 3>& arr0, const Array<Arith1, 3>& arr1) noexcept {
+    return Array<decltype(Arith0() * Arith1()), 3>{
             arr0[1] * arr1[2] - arr0[2] * arr1[1],
             arr0[2] * arr1[0] - arr0[0] * arr1[2],
             arr0[0] * arr1[1] - arr0[1] * arr1[0]};
@@ -88,11 +88,11 @@ constexpr auto cross(
 ///      (\mathbf{x}_1 \times \mathbf{x}_2)
 /// \f]
 ///
-template <typename T, typename U, typename V>
+template <typename Arith0, typename Arith1, typename Arith2>
 constexpr auto cross(
-        const Array<T, 3>& arr0,
-        const Array<U, 3>& arr1,
-        const Array<V, 3>& arr2) noexcept {
+        const Array<Arith0, 3>& arr0,
+        const Array<Arith1, 3>& arr1,
+        const Array<Arith2, 3>& arr2) noexcept {
     return dot(arr0, cross(arr1, arr2));
 }
 
@@ -109,8 +109,8 @@ constexpr auto cross(
 /// overflow or underflow, then this factors the maximum modulus out
 /// from under the radical.
 ///
-template <concepts::arithmetic_or_complex T, size_t N>
-inline auto length(const Array<T, N>& arr) noexcept {
+template <concepts::arithmetic_or_complex Arith, size_t N>
+inline auto length(const Array<Arith, N>& arr) noexcept {
     if constexpr (N == 1) {
         return pre::abs(arr[0]);
     }
@@ -118,7 +118,7 @@ inline auto length(const Array<T, N>& arr) noexcept {
         return pre::hypot(pre::abs(arr[0]), pre::abs(arr[1]));
     }
     else {
-        using Float = to_floating_point_t<T>;
+        using Float = to_floating_point_t<Arith>;
         Array<Float, N> tmp = pre::abs(arr);
         Float tmp_max = 0;
         for (Float tmp_value : tmp)
@@ -156,29 +156,29 @@ inline auto length(const Array<T, N>& arr) noexcept {
 /// the result here is length-squared anyway, additional precautions are
 /// mostly unnecessary.
 ///
-template <concepts::arithmetic_or_complex T, size_t N>
-inline auto length2(const Array<T, N>& arr) noexcept {
+template <concepts::arithmetic_or_complex Arith, size_t N>
+inline auto length2(const Array<Arith, N>& arr) noexcept {
     return pre::norm(arr).sum();
 }
 
 /// Euclidean distance.
-template <concepts::arithmetic T, concepts::arithmetic U, size_t N>
+template <concepts::arithmetic Arith0, concepts::arithmetic Arith1, size_t N>
 inline auto distance(
-        const Array<T, N>& arr0, const Array<U, N>& arr1) noexcept {
+        const Array<Arith0, N>& arr0, const Array<Arith1, N>& arr1) noexcept {
     return length(arr0 - arr1);
 }
 
 /// Euclidean distance-squared.
-template <concepts::arithmetic T, concepts::arithmetic U, size_t N>
+template <concepts::arithmetic Arith0, concepts::arithmetic Arith1, size_t N>
 inline auto distance2(
-        const Array<T, N>& arr0, const Array<U, N>& arr1) noexcept {
+        const Array<Arith0, N>& arr0, const Array<Arith1, N>& arr1) noexcept {
     return length2(arr0 - arr1);
 }
 
 /// Normalize by Euclidean length.
-template <concepts::arithmetic_or_complex T, size_t N>
-inline auto normalize(const Array<T, N>& arr) noexcept {
-    using Float = to_floating_point_t<T>;
+template <concepts::arithmetic_or_complex Arith, size_t N>
+inline auto normalize(const Array<Arith, N>& arr) noexcept {
+    using Float = to_floating_point_t<Arith>;
     using Entry = decltype(arr[0] / Float(1));
     Array<Entry, N> res;
     if (Float len = length(arr); len > 0)
@@ -188,42 +188,42 @@ inline auto normalize(const Array<T, N>& arr) noexcept {
 
 /// Normalize by Euclidean length, component version.
 template <
-        concepts::arithmetic_or_complex T,
-        concepts::arithmetic_or_complex... Ts>
-inline auto normalize(T x0, Ts... xs) noexcept {
+        concepts::arithmetic_or_complex Arith,
+        concepts::arithmetic_or_complex... Ariths>
+inline auto normalize(Arith x0, Ariths... xs) noexcept {
     return normalize(Array{x0, xs...});
 }
 
 /// Fast (unsafe) normalize by Euclidean length.
-template <concepts::arithmetic_or_complex T, size_t N>
-inline auto fast_normalize(const Array<T, N>& arr) noexcept {
-    return arr * (to_floating_point_t<T>(1) / pre::sqrt(length2(arr)));
+template <concepts::arithmetic_or_complex Arith, size_t N>
+inline auto fast_normalize(const Array<Arith, N>& arr) noexcept {
+    return arr * (to_floating_point_t<Arith>(1) / pre::sqrt(length2(arr)));
 }
 
 /// Fast (unsafe) normalize by Euclidean length, component version.
 template <
-        concepts::arithmetic_or_complex T,
-        concepts::arithmetic_or_complex... Ts>
-inline auto fast_normalize(T x0, Ts... xs) noexcept {
+        concepts::arithmetic_or_complex Arith,
+        concepts::arithmetic_or_complex... Ariths>
+inline auto fast_normalize(Arith x0, Ariths... xs) noexcept {
     return fast_normalize(Array{x0, xs...});
 }
 
 /// Angle between vectors in 2-dimensions.
-template <concepts::arithmetic T, concepts::arithmetic U>
+template <concepts::arithmetic Arith0, concepts::arithmetic Arith1>
 inline auto angle_between(
-        const Array<T, 2>& arr0, const Array<U, 2>& arr1) noexcept {
+        const Array<Arith0, 2>& arr0, const Array<Arith1, 2>& arr1) noexcept {
     return pre::atan2(cross(arr0, arr1), dot(arr0, arr1));
 }
 
 /// Matrix conjugate-transpose.
-template <concepts::arithmetic_or_complex T, size_t M, size_t N>
-constexpr Array<T, N, M> adjoint(const Array<T, M, N>& arr) noexcept {
+template <concepts::arithmetic_or_complex Arith, size_t M, size_t N>
+constexpr Array<Arith, N, M> adjoint(const Array<Arith, M, N>& arr) noexcept {
     return pre::conj(transpose(arr));
 }
 
 /// Matrix determinant.
-template <concepts::arithmetic_or_complex T, size_t N>
-inline auto det(const Array<T, N, N>& arr) noexcept {
+template <concepts::arithmetic_or_complex Arith, size_t N>
+inline auto det(const Array<Arith, N, N>& arr) noexcept {
     if constexpr (N == 1) {
         return arr(0, 0);
     }
@@ -234,8 +234,8 @@ inline auto det(const Array<T, N, N>& arr) noexcept {
         return cross(arr[0], arr[1], arr[2]);
     }
     else {
-        using Float = to_floating_point_t<T>;
-        using Field = decltype(T() * Float());
+        using Float = to_floating_point_t<Arith>;
+        using Field = decltype(Arith() * Float());
         try {
             Array<Field, N, N> a = arr;
             Array<int, N> p;
@@ -249,14 +249,14 @@ inline auto det(const Array<T, N, N>& arr) noexcept {
 }
 
 /// Matrix inverse.
-template <concepts::arithmetic_or_complex T, size_t N>
-inline auto inverse(const Array<T, N, N>& arr) noexcept {
-    if constexpr (std::integral<T>) {
+template <concepts::arithmetic_or_complex Arith, size_t N>
+inline auto inverse(const Array<Arith, N, N>& arr) noexcept {
+    if constexpr (std::integral<Arith>) {
         return inverse(Array<double, N, N>(arr));
     }
     else {
-        using Float = to_floating_point_t<T>;
-        using Field = T;
+        using Float = to_floating_point_t<Arith>;
+        using Field = Arith;
         if constexpr (N == 1) {
             return Array<Field, 1, 1>{Field(1) / arr[0][0]};
         }
@@ -290,10 +290,10 @@ inline auto inverse(const Array<T, N, N>& arr) noexcept {
     }
 }
 
-template <concepts::arithmetic_or_complex T, size_t M, size_t N>
-inline auto svd(const Array<T, M, N>& arr) {
-    using Float = to_floating_point_t<T>;
-    using Field = decltype(T() * Float());
+template <concepts::arithmetic_or_complex Arith, size_t M, size_t N>
+inline auto svd(const Array<Arith, M, N>& arr) {
+    using Float = to_floating_point_t<Arith>;
+    using Field = decltype(Arith() * Float());
     Array<Field, M, N> x = arr;
     struct Result {
         Array<Float, pre::min(M, N)> s;
@@ -306,12 +306,13 @@ inline auto svd(const Array<T, M, N>& arr) {
     return result;
 }
 
-template <std::integral P, size_t N>
-constexpr Array<P, N, N> permutation_matrix(const Array<P, N>& p) noexcept {
-    Array<P, N, N> res;
+template <std::integral Int, size_t N>
+constexpr Array<Int, N, N> permutation_matrix(
+        const Array<Int, N>& p) noexcept {
+    Array<Int, N, N> res;
     for (size_t i = 0; i < N; i++)
         for (size_t j = 0; j < N; j++)
-            res(i, j) = p[i] == P(j) ? 1 : 0;
+            res(i, j) = p[i] == Int(j) ? 1 : 0;
     return res;
 }
 

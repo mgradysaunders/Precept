@@ -115,7 +115,7 @@ void Image::swizzle(IteratorRange<const int*> ints) {
     new_dims[2] = dims_[2];
     new_dims[3] = ints.size();
     Image new_image(new_dims, type_, nullptr, wrap);
-    auto go = [&]<typename Data>() {
+    auto go = [&]<typename Data>(Data) {
         auto new_view = new_image.view<Data>();
         auto old_view = view<Data>();
         for (auto index : ArrayRange<3>(new_dims)) {
@@ -127,10 +127,10 @@ void Image::swizzle(IteratorRange<const int*> ints) {
     };
     switch (Type_size(type_)) {
     default: break;
-    case 1: go.template operator()<std::uint8_t>(); break;
-    case 2: go.template operator()<std::uint16_t>(); break;
-    case 4: go.template operator()<std::uint32_t>(); break;
-    case 8: go.template operator()<std::uint64_t>(); break;
+    case 1: go(std::uint8_t()); break;
+    case 2: go(std::uint16_t()); break;
+    case 4: go(std::uint32_t()); break;
+    case 8: go(std::uint64_t()); break;
     }
     new_image.swap(*this);
 }
@@ -161,6 +161,44 @@ void Image::stitch(int axis, const Image& other) {
     new_view(Slice(p0, p1)) = *image0_view;
     new_view(Slice(p1, p2)) = *image1_view;
     new_image.swap(*this);
+}
+
+void Image::srgb_encode(IteratorRange<const int*> ints) {
+    if (empty() or ints.empty())
+        return;
+    Type prev_type = type_;
+    packed_cast(Type_best_float(type_));
+    auto go = [&]<typename Float>(Float) {
+        for (auto i : ints)
+            view<Float>().transpose(0, 3)[i].for_each([](Float& x) {
+                x = srgbenc(clamp(x, Float(0), Float(1)));
+            });
+    };
+    switch (type_) {
+    default:
+    case Float32: go(float()); break;
+    case Float64: go(double()); break;
+    }
+    packed_cast(prev_type);
+}
+
+void Image::srgb_decode(IteratorRange<const int*> ints) {
+    if (empty() or ints.empty())
+        return;
+    Type prev_type = type_;
+    packed_cast(Type_best_float(type_));
+    auto go = [&]<typename Float>(Float) {
+        for (auto i : ints)
+            view<Float>().transpose(0, 3)[i].for_each([](Float& x) {
+                x = srgbdec(clamp(x, Float(0), Float(1)));
+            });
+    };
+    switch (type_) {
+    default:
+    case Float32: go(float()); break;
+    case Float64: go(double()); break;
+    }
+    packed_cast(prev_type);
 }
 
 template <Image::Type Source, Image::Type Target>

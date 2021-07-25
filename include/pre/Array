@@ -550,6 +550,9 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     /** \} */
 
   public:
+    /// \name Utilities
+    /** \{ */
+
     constexpr bool any() const noexcept {
         for (const auto& each : *this) {
             if constexpr (Rank > 1) {
@@ -586,6 +589,37 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
         return std::max_element(begin(), end()) - begin();
     }
 
+    constexpr Array reversed() const noexcept {
+        Array tmp = *this;
+        std::reverse(tmp.begin(), tmp.end());
+        return tmp;
+    }
+
+    constexpr Array sorted() const noexcept requires(Rank == 1) {
+        Array tmp = *this;
+        std::sort(tmp.begin(), tmp.end());
+        return tmp;
+    }
+
+    constexpr Array<int, M> sorted_indexes() const noexcept
+            requires(Rank == 1) {
+        Array<std::pair<Entry, int>, M> pairs;
+        for (size_t k = 0; k < M; k++) {
+            pairs[k].first = operator[](k);
+            pairs[k].second = k;
+        }
+        std::sort(
+                pairs.begin(), pairs.end(),
+                [](const std::pair<Entry, int>& lhs,
+                   const std::pair<Entry, int>& rhs) {
+                    return lhs.first < rhs.first;
+                });
+        Array<int, M> indexes;
+        for (size_t k = 0; k < M; k++)
+            indexes[k] = pairs[k].second;
+        return indexes;
+    }
+
     static constexpr Array identity() noexcept requires(Rank == 2) {
         ssize_t ssizes[] = {M, N...};
         Array arr;
@@ -594,6 +628,8 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
                 arr(i, j) = Entry(i == j ? 1 : 0);
         return arr;
     }
+
+    /** \} */
 
   public:
     /// Smart alignment, to promote vectorization by the compiler.

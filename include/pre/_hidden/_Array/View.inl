@@ -437,6 +437,12 @@ struct ArrayView {
     /// \name Utilities
     /** \{ */
 
+    template <typename Func>
+    constexpr void for_each(Func&& func) noexcept {
+        for (auto ind : ArrayRange(sizes))
+            std::invoke(std::forward<Func>(func), operator[](ind));
+    }
+
     constexpr void get_each(std::output_iterator<Value> auto itr) noexcept {
         for (auto ind : ArrayRange(sizes))
             *itr++ = operator[](ind);
