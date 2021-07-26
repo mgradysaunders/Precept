@@ -50,6 +50,7 @@ struct Noise {
         Float value = 0;            ///< Value in [-1, +1].
         Array<Float, N> deriv = {}; ///< Partial derivatives.
     };
+
     template <std::floating_point... Floats>
     Result operator()(Floats... t) const noexcept {
         static_assert(sizeof...(Floats) == N);
@@ -108,6 +109,10 @@ using Noise3 = Noise<Float, 3>;
 
 template <std::floating_point Float = float>
 using Noise4 = Noise<Float, 4>;
+
+// TODO NoiseLayer
+
+// TODO NoiseLayerSum
 
 } // namespace pre
 
