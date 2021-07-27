@@ -230,8 +230,6 @@ template <typename T>
 
 #include "_hidden/_math/interpolation.inl"
 
-#include "_hidden/_math/color.inl"
-
 #ifdef PRE_ARRAY
 
 #include <pre/memory>

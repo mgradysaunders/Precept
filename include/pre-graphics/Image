@@ -35,6 +35,7 @@
 #include <pre/Array>
 #include <pre/Half>
 #include <pre/math>
+#include <pre-graphics/Color>
 
 namespace pre {
 

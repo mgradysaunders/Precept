@@ -1,0 +1,326 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_COLOR
+#define PRE_GRAPHICS_COLOR
+
+#include <pre/Array>
+#include <pre/math>
+
+namespace pre {
+
+/// Encode linear RGB as sRGB.
+template <std::floating_point Float>
+inline Float srgb_encode(Float v) noexcept {
+    return v <= Float(0.0031308)
+                   ? Float(12.92) * v
+                   : Float(1.055) * pre::pow(v, 1 / Float(2.4)) - Float(0.055);
+}
+
+template <std::floating_point Float>
+inline Array<Float, 3> srgb_encode(const Array<Float, 3>& rgb) noexcept {
+    return {srgb_encode(rgb[0]), //
+            srgb_encode(rgb[1]), //
+            srgb_encode(rgb[2])};
+}
+
+template <std::floating_point Float>
+inline Array<Float, 4> srgb_encode(const Array<Float, 4>& rgba) noexcept {
+    return {srgb_encode(rgba[0]), //
+            srgb_encode(rgba[1]), //
+            srgb_encode(rgba[2]), //
+            rgba[3]};
+}
+
+/// Decode linear RGB from sRGB.
+template <std::floating_point Float>
+inline Float srgb_decode(Float v) noexcept {
+    return v <= Float(0.04045)
+                   ? v / Float(12.92)
+                   : pre::pow((v + Float(0.055)) / Float(1.055), Float(2.4));
+}
+
+template <std::floating_point Float>
+inline Array<Float, 3> srgb_decode(const Array<Float, 3>& rgb) noexcept {
+    return {srgb_decode(rgb[0]), //
+            srgb_decode(rgb[1]), //
+            srgb_decode(rgb[2])};
+}
+
+template <std::floating_point Float>
+inline Array<Float, 4> srgb_decode(const Array<Float, 4>& rgba) noexcept {
+    return {srgb_decode(rgba[0]), //
+            srgb_decode(rgba[1]), //
+            srgb_decode(rgba[2]), //
+            rgba[3]};
+}
+
+/// Fit of CIE 1931 X by Wyman et al.
+///
+/// \param[in] lambda
+/// Wavelength in micrometers.
+///
+/// \see [This publication][1] by Wyman, Sloan, and Shirley.
+/// [1]: http://jcgt.org/published/0002/02/01/
+///
+template <std::floating_point Float>
+inline Float wyman_x(Float lambda) {
+    Float t1 = lambda - Float(0.4420);
+    Float t2 = lambda - Float(0.5998);
+    Float t3 = lambda - Float(0.5011);
+    t1 *= pre::signbit(t1) ? Float(62.4) : Float(37.4);
+    t2 *= pre::signbit(t2) ? Float(26.4) : Float(32.3);
+    t3 *= pre::signbit(t3) ? Float(49.0) : Float(38.2);
+    return Float(0.362) * pre::exp(Float(-0.5) * t1 * t1) +
+           Float(1.056) * pre::exp(Float(-0.5) * t2 * t2) -
+           Float(0.065) * pre::exp(Float(-0.5) * t3 * t3);
+}
+
+/// Fit of CIE 1931 Y by Wyman et al.
+///
+/// \param[in] lambda
+/// Wavelength in micrometers.
+///
+/// \see [This publication][1] by Wyman, Sloan, and Shirley.
+/// [1]: http://jcgt.org/published/0002/02/01/
+///
+template <std::floating_point Float>
+inline Float wyman_y(Float lambda) {
+    Float t1 = lambda - Float(0.5688);
+    Float t2 = lambda - Float(0.5309);
+    t1 *= pre::signbit(t1) ? Float(21.3) : Float(24.7);
+    t2 *= pre::signbit(t2) ? Float(61.3) : Float(32.2);
+    return Float(0.821) * pre::exp(Float(-0.5) * t1 * t1) +
+           Float(0.286) * pre::exp(Float(-0.5) * t2 * t2);
+}
+
+/// Fit of CIE 1931 Z by Wyman et al.
+///
+/// \param[in] lambda
+/// Wavelength in micrometers.
+///
+/// \see [This publication][1] by Wyman, Sloan, and Shirley.
+/// [1]: http://jcgt.org/published/0002/02/01/
+///
+template <std::floating_point Float>
+inline Float wyman_z(Float lambda) {
+    Float t1 = lambda - Float(0.4370);
+    Float t2 = lambda - Float(0.4590);
+    t1 *= pre::signbit(t1) ? Float(84.5) : Float(27.8);
+    t2 *= pre::signbit(t2) ? Float(38.5) : Float(72.5);
+    return Float(1.217) * pre::exp(Float(-0.5) * t1 * t1) +
+           Float(0.681) * pre::exp(Float(-0.5) * t2 * t2);
+}
+
+/// XYZ triple to RGB triple.
+///
+/// \note
+/// This uses standard CIE parameters:
+/// - \f$ C_r = (0.7350, 0.2650) \f$,
+/// - \f$ C_g = (0.2740, 0.7170) \f$,
+/// - \f$ C_b = (0.1670, 0.0090) \f$, and
+/// - \f$ W = (1, 1, 1) \f$.
+///
+/// \see
+/// [Bruce Lindbloom's page][1].
+/// [1]: http://brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+///
+template <std::floating_point Float>
+inline Array<Float, 3> xyz_to_rgb(const Array<Float, 3>& xyz) noexcept {
+    Array<Float, 3, 3> m = {
+            Float(+2.3706743), Float(-0.9000405), Float(-0.4706338), //
+            Float(-0.5138850), Float(+1.4253036), Float(+0.0885814), //
+            Float(+0.0052982), Float(-0.0146949), Float(+1.0093968)};
+    return dot(m, xyz);
+}
+
+/// RGB triple to XYZ triple.
+///
+/// \note
+/// This uses standard CIE parameters:
+/// - \f$ C_r = (0.7350, 0.2650) \f$,
+/// - \f$ C_g = (0.2740, 0.7170) \f$,
+/// - \f$ C_b = (0.1670, 0.0090) \f$, and
+/// - \f$ W = (1, 1, 1) \f$.
+///
+/// \see
+/// [Bruce Lindbloom's page][1].
+/// [1]: http://brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+///
+template <std::floating_point Float>
+inline Array<Float, 3> rgb_to_xyz(const Array<Float, 3>& rgb) noexcept {
+    Array<Float, 3, 3> m = {
+            Float(0.4887180), Float(0.3106803), Float(0.2006017), //
+            Float(0.1762044), Float(0.8129847), Float(0.0108109), //
+            Float(0.0000000), Float(0.0102048), Float(0.9897952)};
+    return dot(m, rgb);
+}
+
+/// RGB to XYZ conversion matrix.
+///
+/// \param[in] cr
+/// xy pair of reference red.
+///
+/// \param[in] cg
+/// xy pair of reference green.
+///
+/// \param[in] cb
+/// xy pair of reference blue.
+///
+/// \param[in] w
+/// XYZ triple of reference white.
+///
+/// \see
+/// [Bruce Lindbloom's page][1].
+/// [1]: http://brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+///
+template <std::floating_point Float>
+inline Array<Float, 3, 3> rgb_to_xyz(
+        const Array<Float, 2>& cr,
+        const Array<Float, 2>& cg,
+        const Array<Float, 2>& cb,
+        const Array<Float, 3>& w) noexcept {
+    Array<Float, 3, 3> m;
+    Array<Float, 3, 3> a = {
+            cr[0] / cr[1],
+            cg[0] / cg[1],
+            cb[0] / cb[1],
+            Float(1),
+            Float(1),
+            Float(1),
+            (Float(1) - cr[0] - cr[1]) / cr[1],
+            (Float(1) - cg[0] - cg[1]) / cg[1],
+            (Float(1) - cb[0] - cb[1]) / cb[1]};
+    Array<Float, 3, 3> acof;
+    acof[0] = cross(a[1], a[2]);
+    acof[1] = cross(a[2], a[0]);
+    acof[2] = cross(a[0], a[1]);
+    Array<Float, 3> s = dot(w, acof) / acof(1).sum();
+    m[0] = a[0] * s;
+    m[1] = a[1] * s;
+    m[2] = a[2] * s;
+    return m;
+}
+
+/// XYZ triple to xyY triple.
+template <std::floating_point Float>
+inline Array<Float, 3> xyz_to_xyy(const Array<Float, 3>& xyz) noexcept {
+    return {xyz[0] / xyz.sum(), //
+            xyz[1] / xyz.sum(), //
+            xyz[1]};
+}
+
+/// xyY triple to XYZ triple.
+template <std::floating_point Float>
+inline Array<Float, 3> xyy_to_xyz(const Array<Float, 3>& xyy) noexcept {
+    return {xyy[2] / xyy[1] * xyy[0], xyy[2], //
+            xyy[2] / xyy[1] * (1 - xyy[0] - xyy[1])};
+}
+
+/// XYZ triple to Lab triple.
+template <std::floating_point Float>
+inline Array<Float, 3> xyz_to_lab(const Array<Float, 3>& xyz) noexcept {
+    auto f = [](Float t) {
+        if (t > Float(216.0 / 24389.0))
+            return std::cbrt(t);
+        else
+            return (t * Float(24389.0 / 27.0) + 16) / 116;
+    };
+    return {116 * f(xyz[1]) - 16,          //
+            500 * (f(xyz[0]) - f(xyz[1])), //
+            200 * (f(xyz[1]) - f(xyz[2]))};
+}
+
+/// Lab triple to XYZ triple.
+template <std::floating_point Float>
+inline Array<Float, 3> lab_to_xyz(const Array<Float, 3>& lab) noexcept {
+    auto finv = [](Float t) {
+        Float t3 = t * t * t;
+        if (t3 > Float(216.0 / 24389.0))
+            return t3;
+        else
+            return (t * 116 - 16) * Float(27.0 / 24389.0);
+    };
+    Float fy = (lab[0] + 16) / 116;
+    Float fx = fy + lab[1] / 500;
+    Float fz = fy - lab[2] / 200;
+    return {finv(fx), finv(fy), finv(fz)};
+}
+
+/// RGB triple to Lab triple.
+template <std::floating_point Float>
+inline Array<Float, 3> rgb_to_lab(const Array<Float, 3>& rgb) noexcept {
+    return xyz_to_lab(rgb_to_xyz(rgb));
+}
+
+/// Lab triple to RGB triple.
+template <std::floating_point Float>
+inline Array<Float, 3> lab_to_rgb(const Array<Float, 3>& lab) noexcept {
+    return xyz_to_rgb(lab_to_xyz(lab));
+}
+
+/// Planck's law.
+///
+/// Planck's law of blackbody radiation is
+/// \f[
+///     b(Float,\lambda) =
+///         \frac{1}{\lambda^5}
+///         \frac{2hc^2}{e^{\frac{hc}{kT\lambda}}-1}
+/// \f]
+/// where, by typical conventions, \f$ Float \f$ is temperature
+/// in degrees kelvin and \f$ \lambda \f$ is wavelength in meters. The
+/// implementation here takes \f$ \lambda \f$ in _micrometers_ instead of
+/// meters, but in the interest of avoiding astronomic values, the output
+/// units are \f$ \mathrm{MW}/\mathrm{sr}/\mathrm{m}^{2}/\mu\mathrm{m} \f$.
+///
+/// \param[in] t
+/// Blackbody temperature in degrees kelvin.
+///
+/// \param[in] lambda
+/// Wavelength in micrometers.
+///
+/// \see Wikipedia's article for [Planck's Law][1].
+/// [1]: https://en.wikipedia.org/wiki/Planck%27s_law
+///
+template <std::floating_point Float>
+inline Float planck(Float t, Float lambda) noexcept {
+    if (!(lambda > 0)) {
+        return 0;
+    }
+    else {
+        constexpr Float c0 = Float(1.19104290768681554502861912e+02L);
+        constexpr Float c1 = Float(1.43877729954300303744214349e+04L);
+        return c0 / (nthpow(lambda, 5) * std::expm1(c1 / (t * lambda)));
+    }
+}
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_COLOR

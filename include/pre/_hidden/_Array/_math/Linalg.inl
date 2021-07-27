@@ -50,7 +50,10 @@ struct Linalg {
 
     static constexpr void load_identity(MatView<Field> a) noexcept {
         a = Field(0);
-        a.diag() = Field(1);
+        int m = a.rows();
+        int n = a.cols();
+        for (int k = 0; k < pre::min(m, n); k++)
+            a(k, k) = Field(1);
     }
 
     static constexpr void load_iota(VecView<int> v) noexcept {

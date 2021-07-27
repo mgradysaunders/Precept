@@ -171,7 +171,7 @@ void Image::srgb_encode(IteratorRange<const int*> ints) {
     auto go = [&]<typename Float>(Float) {
         for (auto i : ints)
             view<Float>().transpose(0, 3)[i].for_each([](Float& x) {
-                x = srgbenc(clamp(x, Float(0), Float(1)));
+                x = pre::srgb_encode(clamp(x, Float(0), Float(1)));
             });
     };
     switch (type_) {
@@ -190,7 +190,7 @@ void Image::srgb_decode(IteratorRange<const int*> ints) {
     auto go = [&]<typename Float>(Float) {
         for (auto i : ints)
             view<Float>().transpose(0, 3)[i].for_each([](Float& x) {
-                x = srgbdec(clamp(x, Float(0), Float(1)));
+                x = pre::srgb_decode(clamp(x, Float(0), Float(1)));
             });
     };
     switch (type_) {
