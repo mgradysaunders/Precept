@@ -31,6 +31,9 @@
 #ifndef PRE_GRAPHICS_GROWABLE_STACK
 #define PRE_GRAPHICS_GROWABLE_STACK
 
+#include <memory>
+#include <pre/meta>
+
 namespace pre {
 
 template <typename Value, size_t StaticSize = 64>
