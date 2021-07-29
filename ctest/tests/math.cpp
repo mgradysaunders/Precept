@@ -120,6 +120,7 @@ TEST_CASE_TEMPLATE("Math", Float, float, double) {
                 CHECK(pre::erfinv(y) == Approx(x).epsilon(0.05));
         }
     }
+#if 0
     pre::Mat3<Float> rgb_to_xyz = pre::rgb_to_xyz(
             pre::Array{Float(0.7350), Float(0.2650)},
             pre::Array{Float(0.2740), Float(0.7170)},
@@ -148,4 +149,5 @@ TEST_CASE_TEMPLATE("Math", Float, float, double) {
             CHECK(is_approx(xyz, pre::luv_to_xyz(w, pre::xyz_to_luv(w, xyz))));
         }
     }
+#endif
 }

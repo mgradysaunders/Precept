@@ -65,7 +65,7 @@ struct Fresnel<Float> {
         rp = (cos_thetai - eta * cos_thetat) / (cos_thetai + eta * cos_thetat);
         ts = 1 + rs;
         tp = (1 + rp) * eta;
-        fr = (rs * rs + rp * rp) / 2;
+        fr = rs * rs / 2 + rp * rp / 2;
         ft = 1 - fr;
         cos_thetat = -cos_thetat;
     }

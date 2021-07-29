@@ -72,6 +72,9 @@
 // for std::is_base_of_v, std::is_arithmetic_v, ...
 #include <type_traits>
 
+// for std::runtime_error
+#include <stdexcept>
+
 // for std::variant
 #include <variant>
 
@@ -129,6 +132,12 @@ struct to_floating_point<T&> {
 template <std::default_initializable T>
 constexpr decltype(auto) steal(T& x) {
     return std::exchange(x, T());
+}
+
+template <typename Exception = std::runtime_error, typename... Args>
+constexpr void throw_if(bool cond, Args&&... args) {
+    if (cond)
+        throw Exception(std::forward<Args>(args)...);
 }
 
 } // namespace pre

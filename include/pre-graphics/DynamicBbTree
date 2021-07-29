@@ -33,6 +33,7 @@
 
 #include <pre/memory>
 #include <pre-graphics/Bound>
+#include <pre-graphics/GrowableStack>
 
 namespace pre {
 
@@ -85,6 +86,24 @@ class DynamicBbTree {
     DynamicBbTree& operator=(DynamicBbTree&&) = default;
 
   public:
+    void clear() noexcept {
+        nodes_.clear();
+        free_ = Nil;
+        root_ = Nil;
+    }
+
+    bool empty() const noexcept {
+        return root_ == Nil;
+    }
+
+    Node& operator[](Int node) noexcept {
+        return nodes_[node];
+    }
+
+    const Node& operator[](Int node) const noexcept {
+        return nodes_[node];
+    }
+
     Int max_height() const {
         return root_ == Nil ? 0 : nodes_[root_].height;
     }
@@ -117,22 +136,16 @@ class DynamicBbTree {
         private_deallocate(node);
     }
 
-    void clear() noexcept {
-        nodes_.clear();
-        free_ = Nil;
-        root_ = Nil;
-    }
-
-    bool empty() const noexcept {
-        return root_ == Nil;
-    }
-
-    Node& operator[](Int node) noexcept {
-        return nodes_[node];
-    }
-
-    const Node& operator[](Int node) const noexcept {
-        return nodes_[node];
+    void update(Int node, const Box& box) {
+        Int parent = nodes_[node].parent;
+        if (parent != Nil and nodes_[parent].box.contains(box)) {
+            nodes_[node].box = box;
+        }
+        else {
+            private_remove(node);
+            nodes_[node].box = box;
+            private_insert(node);
+        }
     }
 
   private:
@@ -143,12 +156,13 @@ class DynamicBbTree {
     Int root_ = Nil;
 
   private:
-    /// \name Private implementation
-    /** \{ */
-
     Int private_allocate();
 
-    void private_deallocate(Int node);
+    void private_deallocate(Int node) {
+        nodes_[node].next = free_;
+        nodes_[node].height = -1;
+        free_ = node;
+    }
 
     void private_insert(Int node);
 
@@ -158,8 +172,6 @@ class DynamicBbTree {
 
     template <bool IsDynamic, typename Func>
     void private_traverse(const Box& box, Func&& func);
-
-    /** \} */
 };
 
 #if 0

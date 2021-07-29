@@ -33,6 +33,7 @@
 
 #include <pre/memory>
 #include <pre-graphics/Bound>
+#include <pre-graphics/GrowableStack>
 
 namespace pre {
 
@@ -101,7 +102,7 @@ class ImmutableBbTree {
     template <std::invocable<const Node*> Func>
     void ray_cast(const Ray<float, Dim>& ray, Func&& func) const {
         RayTester<Box> ray_tester(ray);
-        StaticStack<const Node*, 64> todo;
+        GrowableStack<const Node*> todo;
         if (nodes.size() > 0)
             todo.push(&nodes[0]);
         while (not todo.empty()) {

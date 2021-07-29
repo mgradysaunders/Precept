@@ -1,63 +1,10 @@
+#include <iostream>
 #include <pre-graphics/DynamicBbTree>
 
 namespace pre {
 
-#if 0
 template <size_t Dim>
-void DynamicBbTree<Dim>::rebuild_optimal() {
-    if (root_ == Nil)
-        return;
-    std::vector<Int> todo;
-    todo.reserve(nodes_.size());
-    for (Int node = 0; node < Int(nodes_.size()); node++) {
-        if (nodes_[node].height < 0)
-            continue;
-        if (nodes_[node].is_leaf()) {
-            nodes_[node].parent = Nil;
-            todo.push_back(node);
-        }
-        else {
-            private_deallocate(node);
-        }
-    }
-    while (todo.size() > 1) {
-        float min_cost = INFINITY;
-        Int mini = -1;
-        Int minj = -1;
-        for (Int i = 0; i < Int(todo.size()); ++i) {
-            for (Int j = i + 1; j < Int(todo.size()); ++j) {
-                Box boxi = nodes_[todo[i]].box;
-                Box boxj = nodes_[todo[j]].box;
-                float cost = (boxi | boxj).surface_area();
-                if (min_cost > cost)
-                    min_cost = cost, mini = i, minj = j;
-            }
-        }
-        Int parent = private_allocate();
-        Int child0 = todo[mini];
-        Int child1 = todo[minj];
-        Node& child0_ref = nodes_[child0];
-        Node& child1_ref = nodes_[child1];
-        Node& parent_ref = nodes_[parent];
-        parent_ref.child0 = child0;
-        parent_ref.child1 = child1;
-        parent_ref.height = pre::max(child0_ref.height, child1_ref.height);
-        parent_ref.height++;
-        parent_ref.box = child0_ref.box | child1_ref.box;
-        parent_ref.parent = Nil;
-        child0_ref.parent = parent;
-        child1_ref.parent = parent;
-        todo[minj] = todo.back();
-        todo[mini] = parent;
-        todo.pop_back();
-    }
-    root_ = todo[0];
-}
-#endif
-
-template <size_t Dim>
-typename DynamicBbTree<Dim>::Int DynamicBbTree<
-        Dim>::private_allocate() {
+typename DynamicBbTree<Dim>::Int DynamicBbTree<Dim>::private_allocate() {
     if (free_ == Nil) {
         Int nodes_size = nodes_.size();
         if (nodes_.size() == 0)
@@ -75,13 +22,6 @@ typename DynamicBbTree<Dim>::Int DynamicBbTree<
     free_ = nodes_[node].next;
     nodes_[node] = Node();
     return node;
-}
-
-template <size_t Dim>
-void DynamicBbTree<Dim>::private_deallocate(Int node) {
-    nodes_[node].next = free_;
-    nodes_[node].height = -1;
-    free_ = node;
 }
 
 template <size_t Dim>
@@ -134,13 +74,15 @@ void DynamicBbTree<Dim>::private_insert(Int leaf) {
     else
         root_ = new_parent; // Sibling was root
 
+    // Traverse back to root, rebalancing and updating heights.
     node = nodes_[leaf].parent;
     while (node != Nil) {
         node = private_balance(node);
         Node& node_ref = nodes_[node];
         Node& child0_ref = nodes_[node_ref.child0];
         Node& child1_ref = nodes_[node_ref.child1];
-        node_ref.height = 1 + pre::max(child0_ref.height, child1_ref.height);
+        node_ref.height = std::max(child0_ref.height, child1_ref.height);
+        node_ref.height++;
         node_ref.box = child0_ref.box | child1_ref.box;
         node = node_ref.parent;
     }
@@ -170,7 +112,7 @@ void DynamicBbTree<Dim>::private_remove(Int leaf) {
             Node& child0_ref = nodes_[node_ref.child0];
             Node& child1_ref = nodes_[node_ref.child1];
             node_ref.box = child0_ref.box | child1_ref.box;
-            node_ref.height = pre::max(child0_ref.height, child1_ref.height);
+            node_ref.height = std::max(child0_ref.height, child1_ref.height);
             node_ref.height++;
             node = node_ref.parent;
         }
@@ -184,62 +126,20 @@ void DynamicBbTree<Dim>::private_remove(Int leaf) {
 
 template <size_t Dim>
 typename DynamicBbTree<Dim>::Int DynamicBbTree<Dim>::private_balance(
-        Int a) {
-    Node& a_ref = nodes_[a];
-    if (a_ref.is_leaf() or a_ref.height < 2)
-        return a;
-    Int b = a_ref.child0;
-    Int c = a_ref.child1;
-    Node& b_ref = nodes_[b];
-    Node& c_ref = nodes_[c];
-    Int imbalance = c_ref.height - b_ref.height;
-    // Rotate C up to A.
-    if (imbalance > 1) {
-        Int f = c_ref.child0;
-        Int g = c_ref.child1;
-        Node& f_ref = nodes_[f];
-        Node& g_ref = nodes_[g];
-        // Swap A and C.
-        c_ref.child0 = a;
-        c_ref.parent = a_ref.parent;
-        a_ref.parent = c;
-        if (c_ref.parent != Nil) {
-            if (nodes_[c_ref.parent].child0 == a)
-                nodes_[c_ref.parent].child0 = c;
-            else
-                nodes_[c_ref.parent].child1 = c;
-        }
-        else
-            root_ = c;
-        // Rotate.
-        if (f_ref.height > g_ref.height) {
-            c_ref.child1 = f;
-            a_ref.child1 = g;
-            g_ref.parent = a;
-            a_ref.box = b_ref.box | g_ref.box;
-            c_ref.box = a_ref.box | f_ref.box;
-            a_ref.height = 1 + pre::max(b_ref.height, g_ref.height);
-            c_ref.height = 1 + pre::max(a_ref.height, f_ref.height);
-        }
-        else {
-            c_ref.child1 = g;
-            a_ref.child1 = f;
-            f_ref.parent = a;
-            a_ref.box = b_ref.box | f_ref.box;
-            c_ref.box = a_ref.box | g_ref.box;
-            a_ref.height = 1 + pre::max(b_ref.height, f_ref.height);
-            c_ref.height = 1 + pre::max(a_ref.height, g_ref.height);
-        }
-        return c;
-    }
-    // Rotate B up to A.
-    if (imbalance < -1) {
+        Int node) {
+    // Rotate B above its parent A.
+    auto rotate = [&](Int b, Int a) {
+        Node& a_ref = nodes_[a];
+        Node& b_ref = nodes_[b];
+        Node& c_ref = nodes_[a_ref.child0 == b ? a_ref.child1 : a_ref.child0];
         Int d = b_ref.child0;
         Int e = b_ref.child1;
+        if (nodes_[d].height < nodes_[e].height)
+            std::swap(d, e);
         Node& d_ref = nodes_[d];
         Node& e_ref = nodes_[e];
-        // Swap A and B.
         b_ref.child0 = a;
+        b_ref.child1 = d;
         b_ref.parent = a_ref.parent;
         a_ref.parent = b;
         if (b_ref.parent != Nil) {
@@ -250,28 +150,33 @@ typename DynamicBbTree<Dim>::Int DynamicBbTree<Dim>::private_balance(
         }
         else
             root_ = b;
-        // Rotate.
-        if (d_ref.height > e_ref.height) {
-            b_ref.child1 = d;
+        if (a_ref.child0 == b)
             a_ref.child0 = e;
-            e_ref.parent = a;
-            a_ref.box = c_ref.box | e_ref.box;
-            b_ref.box = a_ref.box | d_ref.box;
-            a_ref.height = 1 + pre::max(c_ref.height, e_ref.height);
-            b_ref.height = 1 + pre::max(a_ref.height, d_ref.height);
-        }
-        else {
-            b_ref.child1 = e;
-            a_ref.child0 = d;
-            d_ref.parent = a;
-            a_ref.box = c_ref.box | d_ref.box;
-            b_ref.box = a_ref.box | e_ref.box;
-            a_ref.height = 1 + pre::max(c_ref.height, d_ref.height);
-            b_ref.height = 1 + pre::max(a_ref.height, e_ref.height);
-        }
-        return b;
+        else
+            a_ref.child1 = e;
+        e_ref.parent = a;
+        a_ref.box = c_ref.box | e_ref.box;
+        b_ref.box = a_ref.box | d_ref.box;
+        a_ref.height = 1 + std::max(c_ref.height, e_ref.height);
+        b_ref.height = 1 + std::max(a_ref.height, d_ref.height);
+    };
+    // Do tree rotation if necessary.
+    Node& node_ref = nodes_[node];
+    if (node_ref.is_leaf() or //
+        node_ref.height < 2)
+        return node;
+    Int child0 = node_ref.child0;
+    Int child1 = node_ref.child1;
+    Int imbalance = nodes_[child1].height - nodes_[child0].height;
+    if (imbalance > 1) {
+        rotate(child1, node);
+        return child1;
     }
-    return a;
+    if (imbalance < -1) {
+        rotate(child0, node);
+        return child0;
+    }
+    return node;
 }
 
 template class DynamicBbTree<2>;

@@ -1,0 +1,128 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_GROWABLE_STACK
+#define PRE_GRAPHICS_GROWABLE_STACK
+
+namespace pre {
+
+template <typename Value, size_t StaticSize = 64>
+struct GrowableStack : ArrayLike<GrowableStack<Value, StaticSize>, Value> {
+  public:
+    constexpr GrowableStack() noexcept {
+        stack_ = &array_[0];
+    }
+
+    GrowableStack(const GrowableStack&) = delete;
+
+    GrowableStack(GrowableStack&&) = delete;
+
+    ~GrowableStack() {
+        if (stack_ != &array_[0])
+            alloc_.deallocate(stack_, stack_capacity_);
+        stack_ = nullptr;
+        stack_top_ = 0;
+        stack_capacity_ = 0;
+    }
+
+  public:
+    /// \name Container API
+    /** \{ */
+
+    constexpr size_t size() const noexcept {
+        return stack_top_;
+    }
+
+    constexpr size_t capacity() const noexcept {
+        return stack_capacity_;
+    }
+
+    constexpr Value* begin() noexcept {
+        return stack_;
+    }
+
+    constexpr const Value* begin() const noexcept {
+        return stack_;
+    }
+
+    constexpr Value* end() noexcept {
+        return stack_ + stack_top_;
+    }
+
+    constexpr const Value* end() const noexcept {
+        return stack_ + stack_top_;
+    }
+
+    constexpr bool empty() const noexcept {
+        return stack_top_ == 0;
+    }
+
+    constexpr void clear() noexcept {
+        for (auto& value : *this)
+            value.~Value();
+        stack_top_ = 0;
+    }
+
+    /** \} */
+
+  public:
+    /// \name Stack API
+    /** \{ */
+
+    void push(const Value& value) {
+        if (stack_capacity_ == stack_top_) {
+            stack_capacity_ *= 2;
+            Value* stack = alloc_.allocate(stack_capacity_);
+            std::move(stack_, stack_ + stack_top_, stack);
+            std::swap(stack_, stack);
+            if (stack != &array_[0])
+                delete stack;
+        }
+        stack_[stack_top_++] = value;
+    }
+
+    Value pop() {
+        ASSERT(stack_top_ > 0);
+        return stack_[--stack_top_];
+    }
+
+    /** \} */
+
+  private:
+    Value array_[StaticSize];
+    Value* stack_ = nullptr;
+    size_t stack_top_ = 0;
+    size_t stack_capacity_ = StaticSize;
+    std::allocator<Value> alloc_;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_GROWABLE_STACK
