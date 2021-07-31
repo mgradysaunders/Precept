@@ -61,7 +61,7 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
     template <std::input_iterator Iterator, std::invocable<Iterator> Cast>
     explicit constexpr Bound(Iterator from, Iterator to, Cast&& cast) {
         while (from != to)
-            *this |= std::invoke(cast, from++);
+            *this |= std::invoke(std::forward<Cast>(cast), from++);
     }
 
     template <concepts::minimal_container Container>
@@ -125,9 +125,9 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
 
     constexpr Bound expand_relative(Value eps) const noexcept
             requires std::floating_point<Value> {
-        auto cen = center();
-        auto off = (1 + eps) / 2 * extent();
-        return Bound{cen - off, cen + off};
+        Point cen = center();
+        Point off = (1 + eps) / 2 * extent();
+        return Bound(cen - off, cen + off);
     }
 
     constexpr Point extent() const noexcept {
@@ -144,7 +144,7 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
 
     constexpr Point clamp(const Point& point) const noexcept {
         return pre::clamp(point, min(), max());
-    }
+    } 
 
     /// Hyper volume.
     ///
@@ -180,6 +180,12 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
             }
             return 2 * area; // Wrong for Dim = 1.
         }
+    }
+
+    /// Aspect ratio, as width over height.
+    constexpr auto aspect() const noexcept requires(Dim == 2) {
+        return to_floating_point_t<Value>(extent()[0]) /
+               to_floating_point_t<Value>(extent()[1]);
     }
 
     template <std::floating_point Float>

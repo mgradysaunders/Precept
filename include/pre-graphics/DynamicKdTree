@@ -34,6 +34,7 @@
 #include <pre/memory>
 #include <pre-graphics/Bound>
 #include <pre-graphics/GrowableStack>
+#include <pre-graphics/UserData>
 
 namespace pre {
 
@@ -58,14 +59,19 @@ class DynamicKdTree {
         };
         Int child0 = Nil;
         Int child1 = Nil;
-        Int axis = 0;
         Int height = 0;
+        Int axis = Nil;
+        Int dead = 0;
+        UserData userdata = {};
 
         constexpr bool is_leaf() const noexcept {
             return child0 == Nil and child1 == Nil;
         }
         constexpr bool is_branch() const noexcept {
             return child0 != Nil or child1 != Nil;
+        }
+        constexpr auto threshold() const noexcept {
+            return point[axis];
         }
         constexpr auto operator<=>(const Point& p) const noexcept {
             return point[axis] <=> p[axis];
@@ -90,6 +96,10 @@ class DynamicKdTree {
         nodes_.clear();
         free_ = Nil;
         root_ = Nil;
+        node_count_ = 0;
+        dead_count_ = 0;
+        rebalance_count_ = 0;
+        box_ = {};
     }
 
     bool empty() const noexcept {
@@ -114,30 +124,35 @@ class DynamicKdTree {
             if (node_ref.height < 2 or //
                 node_ref.child0 == Nil or node_ref.child1 == Nil)
                 continue;
-            const Node& child0_ref = nodes_[node_ref.child0];
-            const Node& child1_ref = nodes_[node_ref.child1];
-            imbalance = pre::max(
-                    imbalance,
-                    pre::abs(child0_ref.height - child1_ref.height));
+            Int height0 = nodes_[node_ref.child0].height;
+            Int height1 = nodes_[node_ref.child1].height;
+            maximize(imbalance, std::abs(height1 - height0));
         }
         return imbalance;
     }
 
-    Int insert(const Point& point) {
+    Int rebalance_count() const noexcept {
+        return rebalance_count_;
+    }
+
+    Int insert(const Point& point, UserData userdata = {}) {
         Int node = private_allocate();
         Node& node_ref = nodes_[node];
         node_ref.point = point;
         node_ref.height = 0;
+        node_ref.userdata = userdata;
         private_insert(node);
         return node;
     }
 
     void remove(Int node) {
-        private_remove(node);
-        private_deallocate(node);
+        if (private_remove(node))
+            private_deallocate(node);
     }
 
-    void update(Int node, const Point& point);
+    // TODO void update(Int node, const Point& point);
+
+    Box region(Int node);
 
   private:
     Nodes nodes_;
@@ -146,20 +161,33 @@ class DynamicKdTree {
 
     Int root_ = Nil;
 
+    Int node_count_ = 0;
+
+    Int dead_count_ = 0;
+
+    Int rebalance_count_ = 0;
+
+    Box box_;
+
   private:
     Int private_allocate();
 
     void private_deallocate(Int node) {
+        node_count_--;
         nodes_[node].next = free_;
         nodes_[node].height = -1;
         free_ = node;
     }
 
+    Int private_select_axis(Int node);
+
     void private_insert(Int node);
 
-    void private_remove(Int node);
+    bool private_remove(Int node);
 
-    void private_rebalance(Int node);
+    void private_rebalance();
+
+    Int private_rebalance(IteratorRange<Int*> nodes);
 
 #if 0
   private:

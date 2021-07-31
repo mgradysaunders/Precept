@@ -102,7 +102,7 @@ class ImmutableBbTree {
 
     template <
             std::invocable<const Box&> Test,
-            std::invocable<const Node*> Visitor>
+            std::invocable<const Node&> Visitor>
     void visit(Test&& test, Visitor&& visitor) {
         GrowableStack<const Node*> todo;
         if (nodes.size())
@@ -115,24 +115,24 @@ class ImmutableBbTree {
                 todo.push(node + 1);
                 todo.push(node + node->right);
             }
-            else if (not std::invoke(std::forward<Visitor>(visitor), node))
+            else if (not std::invoke(std::forward<Visitor>(visitor), *node))
                 return;
         }
     }
 
-    template <std::invocable<const Node*> Visitor>
+    template <std::invocable<const Node&> Visitor>
     void visit_overlaps(const Box& box, Visitor&& visitor) {
         visit([&](const Box& other) { return box.overlaps(other); },
               std::forward<Visitor>(visitor));
     }
 
-    template <std::invocable<const Node*> Visitor>
+    template <std::invocable<const Node&> Visitor>
     void visit_contains(const Box& box, Visitor&& visitor) {
         visit([&](const Box& other) { return box.contains(other); },
               std::forward<Visitor>(visitor));
     }
 
-    template <std::invocable<const Node*> Visitor>
+    template <std::invocable<const Node&> Visitor>
     void visit_ray_cast(const Ray<float, Dim>& ray, Visitor&& visitor) {
         visit(RayTester<Box>(ray), std::forward<Visitor>(visitor));
     }

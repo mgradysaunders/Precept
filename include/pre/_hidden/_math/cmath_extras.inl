@@ -22,6 +22,22 @@ constexpr auto max(Arith0 x, Arith1 y) noexcept {
     return x < y ? y : x;
 }
 
+/// Equivalent to `x = min(x, y)`.
+template <
+        concepts::arithmetic_or_enum Arith0,
+        concepts::arithmetic_or_enum Arith1>
+constexpr void minimize(Arith0& x, Arith1 y) noexcept {
+    x = pre::min(x, y);
+}
+
+/// Equivalent to `x = max(x, y)`.
+template <
+        concepts::arithmetic_or_enum Arith0,
+        concepts::arithmetic_or_enum Arith1>
+constexpr void maximize(Arith0& x, Arith1 y) noexcept {
+    x = pre::max(x, y);
+}
+
 /// Clamp in range.
 ///
 /// \param[in] x  Value.

@@ -115,11 +115,9 @@ class DynamicBbTree {
         for (const Node& node_ref : nodes_) {
             if (node_ref.height < 2)
                 continue;
-            const Node& child0_ref = nodes_[node_ref.child0];
-            const Node& child1_ref = nodes_[node_ref.child1];
-            imbalance = pre::max(
-                    imbalance,
-                    pre::abs(child0_ref.height - child1_ref.height));
+            Int height0 = nodes_[node_ref.child0].height;
+            Int height1 = nodes_[node_ref.child1].height;
+            maximize(imbalance, std::abs(height1 - height0));
         }
         return imbalance;
     }
