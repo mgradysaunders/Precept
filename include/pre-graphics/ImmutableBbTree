@@ -44,6 +44,7 @@ class ImmutableBbTree {
 
   public:
     using Box = Bound<float, Dim>;
+
     using Point = Array<float, Dim>;
 
     struct Node {
@@ -99,33 +100,41 @@ class ImmutableBbTree {
         nodes.clear();
     }
 
-    template <std::invocable<const Node*> Func>
-    void ray_cast(const Ray<float, Dim>& ray, Func&& func) const {
-        RayTester<Box> ray_tester(ray);
+    template <
+            std::invocable<const Box&> Test,
+            std::invocable<const Node*> Visitor>
+    void visit(Test&& test, Visitor&& visitor) {
         GrowableStack<const Node*> todo;
-        if (nodes.size() > 0)
+        if (nodes.size())
             todo.push(&nodes[0]);
         while (not todo.empty()) {
             const Node* node = todo.pop();
-            if (not ray_tester(node->box))
-                continue; // Skip
-
+            if (not std::invoke(std::forward<Test>(test), node->box))
+                continue;
             if (node->is_branch()) {
                 todo.push(node + 1);
                 todo.push(node + node->right);
-
-                // If ray direction is positive in splitting dimension
-                // of the branch, then reverse the traversal order of the
-                // children, so that the left child is first.
-                if (pre::signbit(ray.dir[node->split_axis]) == false)
-                    std::swap(todo[-1], todo[-2]);
             }
-            else {
-                // Pass to leaf callback
-                if (std::invoke(func, node) == false)
-                    return;
-            }
+            else if (not std::invoke(std::forward<Visitor>(visitor), node))
+                return;
         }
+    }
+
+    template <std::invocable<const Node*> Visitor>
+    void visit_overlaps(const Box& box, Visitor&& visitor) {
+        visit([&](const Box& other) { return box.overlaps(other); },
+              std::forward<Visitor>(visitor));
+    }
+
+    template <std::invocable<const Node*> Visitor>
+    void visit_contains(const Box& box, Visitor&& visitor) {
+        visit([&](const Box& other) { return box.contains(other); },
+              std::forward<Visitor>(visitor));
+    }
+
+    template <std::invocable<const Node*> Visitor>
+    void visit_ray_cast(const Ray<float, Dim>& ray, Visitor&& visitor) {
+        visit(RayTester<Box>(ray), std::forward<Visitor>(visitor));
     }
 
     void serialize(auto& serializer) {

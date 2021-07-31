@@ -34,6 +34,7 @@
 #include <pre/memory>
 #include <pre-graphics/Bound>
 #include <pre-graphics/GrowableStack>
+#include <pre-graphics/UserData>
 
 namespace pre {
 
@@ -63,6 +64,7 @@ class DynamicBbTree {
         Int child0 = Nil;
         Int child1 = Nil;
         Int height = 0;
+        UserData userdata = {};
 
         constexpr bool is_leaf() const noexcept {
             return child0 == Nil;
@@ -122,11 +124,12 @@ class DynamicBbTree {
         return imbalance;
     }
 
-    Int insert(const Box& box) {
+    Int insert(const Box& box, UserData userdata = {}) {
         Int node = private_allocate();
         Node& node_ref = nodes_[node];
         node_ref.box = box;
         node_ref.height = 0;
+        node_ref.userdata = userdata;
         private_insert(node);
         return node;
     }
@@ -146,6 +149,43 @@ class DynamicBbTree {
             nodes_[node].box = box;
             private_insert(node);
         }
+    }
+
+    template <std::invocable<const Box&> Test, std::invocable<Int> Visitor>
+    void visit(Test&& test, Visitor&& visitor) {
+        GrowableStack<Int> todo;
+        if (root_ != Nil)
+            todo.push(root_);
+        while (not todo.empty()) {
+            Int node = todo.pop();
+            Node& node_ref = nodes_[node];
+            const Box& box = node_ref.box;
+            if (not std::invoke(std::forward<Test>(test), box))
+                continue;
+            if (node_ref.is_branch()) {
+                todo.push(node_ref.child0);
+                todo.push(node_ref.child1);
+            }
+            else if (not std::invoke(std::forward<Visitor>(visitor), node))
+                return;
+        }
+    }
+
+    template <std::invocable<Int> Visitor>
+    void visit_overlaps(const Box& box, Visitor&& visitor) {
+        visit([&](const Box& other) { return box.overlaps(other); },
+              std::forward<Visitor>(visitor));
+    }
+
+    template <std::invocable<Int> Visitor>
+    void visit_contains(const Box& box, Visitor&& visitor) {
+        visit([&](const Box& other) { return box.contains(other); },
+              std::forward<Visitor>(visitor));
+    }
+
+    template <std::invocable<Int> Visitor>
+    void visit_ray_cast(const Ray<float, Dim>& ray, Visitor&& visitor) {
+        visit(RayTester<Box>(ray), std::forward<Visitor>(visitor));
     }
 
   private:
@@ -169,32 +209,7 @@ class DynamicBbTree {
     void private_remove(Int node);
 
     Int private_balance(Int node);
-
-    template <bool IsDynamic, typename Func>
-    void private_traverse(const Box& box, Func&& func);
 };
-
-#if 0
-template <size_t Dim>
-template <bool IsDynamic, typename Func>
-inline void DynamicBbTree<Dim>::private_traverse(const Box& box, Func&& func) {
-    StaticStack<Int, 128> todo;
-    if (root_ != Nil)
-        todo.push(root_);
-    while (not todo.empty()) {
-        Int node = todo.pop();
-        Node& node_ref = nodes_[node];
-        if (node_ref.is_branch()) {
-            if (nodes_[node_ref.child0].box.overlaps(box))
-                todo.push(node_ref.child0);
-            if (nodes_[node_ref.child1].box.overlaps(box))
-                todo.push(node_ref.child1);
-        }
-        else if (not std::invoke(func, node))
-            return;
-    }
-}
-#endif
 
 using DynamicBbTree2 = DynamicBbTree<2>;
 

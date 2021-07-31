@@ -78,6 +78,14 @@ template <typename T>
 concept floating_point_or_complex =
         std::floating_point<T> || matches<T, std::complex>;
 
+/// Is scalar? (arithmetic, pointer, enum, or nullptr_t)
+template <typename T>
+concept scalar = std::is_scalar_v<T>;
+
+/// Is trivial?
+template <typename T>
+concept trivial = std::is_trivial_v<T>;
+
 // Is functor?
 template <typename T>
 concept functor = requires {

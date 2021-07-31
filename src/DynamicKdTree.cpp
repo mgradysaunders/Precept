@@ -69,8 +69,22 @@ void DynamicKdTree<Dim>::private_remove(Int node) {
 }
 
 template <size_t Dim>
-void DynamicKdTree<Dim>::private_rebalance(Int node) {
-    // TODO
+void DynamicKdTree<Dim>::private_rebalance(Int root) {
+    std::vector<Node*> node_ptrs;
+    {
+        GrowableStack<Int> todo;
+        todo.push(root);
+        node_ptrs.reserve(32);
+        while (not todo.empty()) {
+            Int node = todo.pop();
+            Node& node_ref = nodes_[node];
+            if (node_ref.child0 != Nil)
+                todo.push(node_ref.child0);
+            if (node_ref.child1 != Nil)
+                todo.push(node_ref.child1);
+            node_ptrs.push_back(&node_ref);
+        }
+    }
 }
 
 template class DynamicKdTree<2>;

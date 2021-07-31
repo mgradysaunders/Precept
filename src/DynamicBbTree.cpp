@@ -58,8 +58,8 @@ void DynamicBbTree<Dim>::private_insert(Int leaf) {
     Int old_parent = nodes_[node].parent;
     Int new_parent = private_allocate();
     Node& new_parent_ref = nodes_[new_parent];
-    new_parent_ref.parent = old_parent;
     new_parent_ref.box = leaf_box | nodes_[node].box;
+    new_parent_ref.parent = old_parent;
     new_parent_ref.child0 = node;
     new_parent_ref.child1 = leaf;
     new_parent_ref.height = nodes_[node].height + 1;
