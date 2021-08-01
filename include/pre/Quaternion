@@ -347,6 +347,11 @@ class Quaternion<Dual<Float>> final : public BasicQuaternion<Dual<Float>> {
     }
 
   public:
+    constexpr Quaternion dual_conj() const noexcept {
+        return {this->arr_[0].dual_conj(), this->arr_[1].dual_conj(),
+                this->arr_[2].dual_conj(), this->arr_[3].dual_conj()};
+    }
+
     constexpr Quaternion conj() const noexcept {
         return static_cast<const Base&>(*this).conj();
     }
@@ -355,9 +360,12 @@ class Quaternion<Dual<Float>> final : public BasicQuaternion<Dual<Float>> {
         return static_cast<const Base&>(*this).inverse();
     }
 
-    constexpr Quaternion dual_conj() const noexcept {
-        return {this->arr_[0].dual_conj(), this->arr_[1].dual_conj(),
-                this->arr_[2].dual_conj(), this->arr_[3].dual_conj()};
+    Float length() const noexcept {
+        return quat_real().length();
+    }
+
+    [[nodiscard]] Quaternion normalize() const noexcept {
+        return this->arr_ / this->length();
     }
 
     Float rotation_angle() const noexcept {

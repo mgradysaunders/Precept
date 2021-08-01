@@ -1,4 +1,3 @@
-#include <iostream>
 #include <pre-graphics/DynamicKdTree>
 
 namespace pre {
