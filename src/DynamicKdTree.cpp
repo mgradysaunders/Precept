@@ -4,6 +4,104 @@
 namespace pre {
 
 template <size_t Dim>
+typename DynamicKdTree<Dim>::Box DynamicKdTree<Dim>::region(Int node) const {
+    Box box = box_;
+    Array<bool, Dim> min_done = {};
+    Array<bool, Dim> max_done = {};
+    Point point = nodes_[node].point;
+    Int parent = Nil;
+    for (parent = nodes_[node].parent; parent != Nil;
+         parent = nodes_[parent].parent) {
+        const Node& ref = nodes_[parent];
+        if (point < ref) {
+            minimize(box[1][ref.axis], ref.threshold());
+            max_done[ref.axis] = true;
+        }
+        else {
+            maximize(box[0][ref.axis], ref.threshold());
+            min_done[ref.axis] = true;
+        }
+        if (min_done.all() and max_done.all())
+            break;
+    }
+    return box;
+}
+
+template <size_t Dim>
+typename DynamicKdTree<Dim>::Nearest DynamicKdTree<Dim>::nearest(
+        Point point) const {
+    Nearest near;
+    GrowableStack<Int> todo;
+    if (root_ != Nil)
+        todo.push(root_);
+    while (not todo.empty()) {
+        Int node = todo.pop();
+        const Node& node_ref = nodes_[node];
+        if (not node_ref.dead) {
+            float dist2 = distance2(node_ref.point, point);
+            if (near.dist2 > dist2) {
+                near.dist2 = dist2;
+                near.node = node;
+            }
+        }
+        float diff = node_ref.point[node_ref.axis] - point[node_ref.axis];
+        Int child0 = node_ref.child0;
+        Int child1 = node_ref.child1;
+        if (diff > 0) {
+            diff = -diff;
+            std::swap(child0, child1);
+        }
+        if (child0 != Nil and (diff > 0 or diff * diff < near.dist2))
+            todo.push(child0);
+        if (child1 != Nil and (diff < 0 or diff * diff < near.dist2))
+            todo.push(child1);
+    }
+    return near;
+}
+template <size_t Dim>
+void DynamicKdTree<Dim>::nearest(
+        Point point, IteratorRange<Nearest*> near) const {
+    if (near.size() == 0)
+        return;
+    if (near.size() == 1) {
+        near[0] = nearest(point);
+        return;
+    }
+    near.fill(Nearest());
+    Nearest* heap = near.begin();
+    GrowableStack<Int> todo;
+    if (root_ != Nil)
+        todo.push(root_);
+    while (not todo.empty()) {
+        Int node = todo.pop();
+        const Node& node_ref = nodes_[node];
+        float dist2 = distance2(node_ref.point, point);
+        if (heap != near.end() or //
+            dist2 < near[0].dist2) {
+            if (heap == near.end())
+                std::pop_heap(near.begin(), heap--);
+            heap->node = node;
+            heap->dist2 = dist2;
+            std::push_heap(near.begin(), ++heap);
+        }
+        float diff = node_ref.point[node_ref.axis] - point[node_ref.axis];
+        Int child0 = node_ref.child0;
+        Int child1 = node_ref.child1;
+        if (diff > 0) {
+            diff = -diff;
+            std::swap(child0, child1);
+        }
+        if (child0 != Nil and
+            (heap != near.end() or diff > 0 or diff * diff < near[0].dist2))
+            todo.push(child0);
+        if (child1 != Nil and
+            (heap != near.end() or diff < 0 or diff * diff < near[0].dist2))
+            todo.push(child1);
+    }
+    std::sort_heap(near.begin(), heap);
+}
+
+template <size_t Dim>
 typename DynamicKdTree<Dim>::Int DynamicKdTree<Dim>::private_allocate() {
     if (free_ == Nil) {
         Int nodes_size = nodes_.size();
@@ -23,30 +121,6 @@ typename DynamicKdTree<Dim>::Int DynamicKdTree<Dim>::private_allocate() {
     node_count_++;
     nodes_[node] = Node();
     return node;
-}
-
-template <size_t Dim>
-typename DynamicKdTree<Dim>::Box DynamicKdTree<Dim>::region(Int node) {
-    Box box = box_;
-    Array<bool, Dim> min_done = {};
-    Array<bool, Dim> max_done = {};
-    Point point = nodes_[node].point;
-    Int parent = Nil;
-    for (parent = nodes_[node].parent; parent != Nil;
-         parent = nodes_[parent].parent) {
-        Node& ref = nodes_[parent];
-        if (point < ref) {
-            minimize(box[1][ref.axis], ref.threshold());
-            max_done[ref.axis] = true;
-        }
-        else {
-            maximize(box[0][ref.axis], ref.threshold());
-            min_done[ref.axis] = true;
-        }
-        if (min_done.all() and max_done.all())
-            break;
-    }
-    return box;
 }
 
 template <size_t Dim>
@@ -80,12 +154,11 @@ void DynamicKdTree<Dim>::private_insert(Int leaf) {
         nodes_[root_].parent = Nil;
         return;
     }
-
     Int node = root_;
     while (1) {
         Node& leaf_ref = nodes_[leaf];
         Node& node_ref = nodes_[node];
-        if (node_ref.axis == Nil)
+        if (node_ref.axis == -1)
             node_ref.axis = private_select_axis(node);
         Int* child0 = &node_ref.child0;
         Int* child1 = &node_ref.child1;
@@ -157,6 +230,7 @@ template <size_t Dim>
 void DynamicKdTree<Dim>::private_rebalance() {
     std::vector<Int> nodes;
     nodes.reserve(nodes_.size());
+    box_ = {};
     for (Int node = 0; node < Int(nodes_.size()); node++) {
         if (nodes_[node].dead) { // Dead?
             private_deallocate(node);
@@ -171,6 +245,7 @@ void DynamicKdTree<Dim>::private_rebalance() {
             node_ref.axis = Nil;
             node_ref.dead = false;
             nodes.push_back(node);
+            box_ |= node_ref.point;
         }
     }
     dead_count_ = 0;

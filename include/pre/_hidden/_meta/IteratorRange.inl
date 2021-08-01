@@ -36,6 +36,10 @@ class IteratorRange {
 
     constexpr IteratorRange(IteratorRange&&) = default;
 
+    constexpr IteratorRange& operator=(const IteratorRange&) = default;
+
+    constexpr IteratorRange& operator=(IteratorRange&&) = default;
+
     constexpr Iterator begin() {
         return begin_;
     }
@@ -64,20 +68,20 @@ class IteratorRange {
         return *std::next(begin_, pos);
     }
 
+    template <typename Value>
+    constexpr void fill(const Value& value) {
+        std::fill(begin_, end_, value);
+    }
+
+    template <typename Value>
+    constexpr bool contains(const Value& value) {
+        return std::find(begin_, end_, value) != end_;
+    }
+
     template <typename Other>
     constexpr operator IteratorRange<Other>() {
         return {Other(begin_), Other(end_)};
     }
-
-    template <typename Value>
-    constexpr bool contains(const Value& val) {
-        return std::find(begin_, end_, val) != end_;
-    }
-
-  public:
-    constexpr IteratorRange& operator=(const IteratorRange&) = default;
-
-    constexpr IteratorRange& operator=(IteratorRange&&) = default;
 
   private:
     Iterator begin_ = {};

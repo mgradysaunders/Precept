@@ -59,9 +59,9 @@ class DynamicKdTree {
         };
         Int child0 = Nil;
         Int child1 = Nil;
-        Int height = 0;
-        Int axis = Nil;
-        Int dead = 0;
+        Int height : 16 = -1;
+        Int axis : 8 = -1;
+        Int dead : 8 = 0;
         UserData userdata = {};
 
         constexpr bool is_leaf() const noexcept {
@@ -131,6 +131,14 @@ class DynamicKdTree {
         return imbalance;
     }
 
+    Int node_count() const noexcept {
+        return node_count_;
+    }
+
+    Int dead_count() const noexcept {
+        return dead_count_;
+    }
+
     Int rebalance_count() const noexcept {
         return rebalance_count_;
     }
@@ -150,9 +158,65 @@ class DynamicKdTree {
             private_deallocate(node);
     }
 
+    void rebalance() {
+        private_rebalance();
+    }
+
     // TODO void update(Int node, const Point& point);
 
-    Box region(Int node);
+  public:
+    Box region(Int node) const;
+
+    /// Visit all nodes in box.
+    template <std::invocable<Int> Visitor>
+    void visit(const Box& box, Visitor&& visitor) {
+        GrowableStack<Int> todo;
+        if (root_ != Nil)
+            todo.push(root_);
+        while (not todo.empty()) {
+            Int node = todo.pop();
+            Node& node_ref = nodes_[node];
+            if (not node_ref.dead and
+                not std::invoke(std::forward<Visitor>(visitor), node))
+                return;
+            Int axis = node_ref.axis;
+            Int child0 = node_ref.child0;
+            Int child1 = node_ref.child1;
+            if (child0 != Nil and node_ref.point[axis] > box.min(axis))
+                todo.push(child0);
+            if (child1 != Nil and node_ref.point[axis] < box.max(axis))
+                todo.push(child1);
+        }
+    }
+
+    /// Visit all nodes in sphere.
+    template <std::invocable<Int> Visitor>
+    void visit(const Point& center, float radius, Visitor&& visitor) {
+        float radius2 = radius * radius;
+        Point min_point = center - Point(std::abs(radius));
+        Point max_point = center + Point(std::abs(radius));
+        visit(Box(min_point, max_point), [&](Int node) {
+            if (distance2(nodes_[node].point, center) < radius2 and
+                not std::invoke(std::forward<Visitor>(visitor), node))
+                return false;
+            return true;
+        });
+    }
+
+    struct Nearest {
+        /// Node.
+        Int node = Nil;
+        /// Distance squared.
+        float dist2 = Inf<float>;
+        /// Comparison operator.
+        constexpr auto operator<=>(const Nearest& other) const noexcept {
+            return dist2 <=> other.dist2;
+        }
+    };
+
+    Nearest nearest(Point point) const;
+
+    void nearest(Point point, IteratorRange<Nearest*> near) const;
 
   private:
     Nodes nodes_;
@@ -188,46 +252,6 @@ class DynamicKdTree {
     void private_rebalance();
 
     Int private_rebalance(IteratorRange<Int*> nodes);
-
-#if 0
-  private:
-    template <bool IsDynamic, typename Func>
-    void do_traverse(Point point, Float radius, Func&& func) const {
-        radius *= radius;
-        NodeStack<IsDynamic> todo(optimal_depth(), root_);
-        while (not todo.empty()) {
-            Node* node = todo.pop();
-            Point diff = node->value.first - point;
-            if (node->value and length2(diff) < radius and
-                not std::invoke(func, iterator(node))) // Stop?
-                return;
-            todo.push_if(diff[node->axis] > -radius, node->left);
-            todo.push_if(diff[node->axis] < +radius, node->right);
-        }
-    }
-
-    template <bool IsDynamic>
-    iterator do_nearest(Point point) const {
-        Node* result = nullptr;
-        Float result_dist2 = Inf<Float>;
-        NodeStack<IsDynamic> todo(optimal_depth(), root_);
-        while (not todo.empty()) {
-            Node* node = todo.pop();
-            Point diff = node->value.first - point;
-            if (node->value) {
-                Float dist2 = length2(diff);
-                if (result_dist2 > dist2) {
-                    result_dist2 = dist2;
-                    result = node;
-                }
-            }
-            Float d = diff[node->axis];
-            todo.push_if(d * d < result_dist2 or d > 0, node->left);
-            todo.push_if(d * d < result_dist2 or d < 0, node->right);
-        }
-        return result;
-    }
-#endif
 };
 
 using DynamicKdTree2 = DynamicKdTree<2>;

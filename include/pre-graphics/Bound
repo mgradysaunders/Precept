@@ -103,6 +103,14 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
         return points[1];
     }
 
+    constexpr const Value& min(int dim) const noexcept {
+        return points[0][dim];
+    }
+
+    constexpr const Value& max(int dim) const noexcept {
+        return points[1][dim];
+    }
+
     constexpr bool overlaps(const Bound& other) const noexcept {
         return (min() <= other.max() and max() >= other.min()).all();
     }
