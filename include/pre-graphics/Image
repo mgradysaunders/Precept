@@ -178,7 +178,8 @@ class Image {
 
     void resize(Dims new_dims);
 
-    void resample(Dims new_dims);
+    /// Resample.
+    void resample(Array<int, 3> new_dims);
 
     /// Transpose/swap given axes.
     void transpose(int axis0, int axis1);

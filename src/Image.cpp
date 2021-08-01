@@ -52,13 +52,77 @@ void Image::resize(Dims new_dims) {
     new_image.swap(*this);
 }
 
-void Image::resample(Dims new_dims) {
+template <concepts::image_data Data, size_t Channels>
+static void resample1(
+        ImageSampler1<Data, Channels> sampler0, //
+        ImageSampler1<Data, Channels> sampler1) {
+    int size0 = sampler0.view.size();
+    int size1 = sampler1.view.size();
+    if (size0 == size1) {
+        sampler1.view = *sampler0.view;
+        return;
+    }
+    float ratio = size0 / float(size1);
+    float width = 2.0f * std::fmax(1.0f, ratio);
+    for (int pos1 = 0; pos1 < size1; pos1++)
+        sampler1.store(
+                {pos1}, sampler0.filter(
+                                {pos1 * ratio}, {width},
+                                image_filter::mitchell<float>));
+}
+
+template <concepts::image_data Data, size_t Channels>
+static void resample1(Image& image0, Image& image1, int axis, int& first) {
+    auto sampler0 = make_sampler<Data, Channels>(image0, first);
+    auto sampler1 = make_sampler<Data, Channels>(image1, first);
+    sampler0.view = sampler0.view.transpose(2, axis);
+    sampler1.view = sampler1.view.transpose(2, axis);
+    std::swap(sampler0.wrap[2], sampler0.wrap[axis]);
+    std::swap(sampler1.wrap[2], sampler1.wrap[axis]);
+    first += Channels;
+    int other0 = sampler0.view.sizes[0];
+    int other1 = sampler0.view.sizes[1];
+    for (int index0 = 0; index0 < other0; index0++)
+        for (int index1 = 0; index1 < other1; index1++)
+            resample1(
+                    sampler0[index0][index1], //
+                    sampler1[index0][index1]);
+}
+
+template <concepts::image_data Data>
+static void resample1(Image& image0, int axis, int size) {
+    Image::Type type = image0.type();
+    Image::Dims dims = image0.dims();
+    if (dims[axis] != size) {
+        dims[axis] = size;
+        Image image1(dims, type, nullptr, image0.wrap);
+        for (int first = 0; first < dims[3];) {
+            if (first + 4 <= dims[3])
+                resample1<Data, 4>(image0, image1, axis, first);
+            else if (first + 2 <= dims[3])
+                resample1<Data, 2>(image0, image1, axis, first);
+            else
+                resample1<Data, 1>(image0, image1, axis, first);
+        }
+        image0.swap(image1);
+    }
+}
+
+void Image::resample(Array<int, 3> new_dims) {
     if (empty() or new_dims.prod() <= 0) {
         clear();
         return;
     }
-
-    // TODO
+    Type prev_type = type_;
+    packed_cast(Type_best_float(type_));
+    for (int axis = 0; axis < 3; axis++) {
+        switch (type_) {
+        default:
+        case Float32: resample1<float>(*this, axis, new_dims[axis]); break;
+        case Float64: resample1<double>(*this, axis, new_dims[axis]); break;
+        }
+    }
+    packed_cast(prev_type);
 }
 
 void Image::transpose(int axis0, int axis1) {
@@ -171,7 +235,7 @@ void Image::srgb_encode(IteratorRange<const int*> ints) {
     auto go = [&]<typename Float>(Float) {
         for (auto i : ints)
             view<Float>().transpose(0, 3)[i].for_each([](Float& x) {
-                x = pre::srgb_encode(clamp(x, Float(0), Float(1)));
+                x = pre::srgb_encode(pre::clamp(x, Float(0), Float(1)));
             });
     };
     switch (type_) {
@@ -190,7 +254,7 @@ void Image::srgb_decode(IteratorRange<const int*> ints) {
     auto go = [&]<typename Float>(Float) {
         for (auto i : ints)
             view<Float>().transpose(0, 3)[i].for_each([](Float& x) {
-                x = pre::srgb_decode(clamp(x, Float(0), Float(1)));
+                x = pre::srgb_decode(pre::clamp(x, Float(0), Float(1)));
             });
     };
     switch (type_) {

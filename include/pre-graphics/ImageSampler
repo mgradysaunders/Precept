@@ -240,11 +240,14 @@ template <concepts::image_data Data, size_t Channels>
 using ImageSampler3 = ImageSampler<Data, 3, Channels>;
 
 template <concepts::image_data Data, size_t Channels>
-inline ImageSampler3<Data, Channels> make_sampler(Image& im) {
-    if (im.type() != Image::Type_convert<Data>() or
-        im.dims()[3] < int(Channels))
+inline ImageSampler3<Data, Channels> make_sampler(
+        Image& image, int first = 0) {
+    if (image.type() != Image::Type_convert<Data>() or
+        image.dims()[3] - first < int(Channels))
         throw std::invalid_argument("invalid image for sampler");
-    return {im.view<Data>(), im.wrap};
+    return {image.view<Data>()(
+                    Slice(), Slice(), Slice(), Slice(first, first + Channels)),
+            image.wrap};
 }
 
 } // namespace pre
