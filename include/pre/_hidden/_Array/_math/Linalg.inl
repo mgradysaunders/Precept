@@ -9,7 +9,6 @@ template <
 struct Linalg {
   public:
     using Float = to_floating_point_t<Field>;
-    using FloatLimits = numeric_limits<Float>;
 
   private:
     /// A cache to prevent excessive heap allocations.
@@ -122,21 +121,19 @@ struct Linalg {
         case 2: return std::hypot(std::abs(v[0]), std::abs(v[1]));
         default: break;
         }
-        auto _ = cache_.scoped_push();
+        auto push = cache_.scoped_push();
         auto absv = cache_.template vector<Float>(n);
         absv = pre::abs(*v);
         auto absv_max = *std::max_element(absv.begin(), absv.end());
         if (absv_max == 0)
             return 0;
-        else if (
-                absv_max * absv_max * n > FloatLimits::max() ||
-                absv_max < FloatLimits::min_squarable()) {
+        if (absv_max * absv_max * n > Maximum<Float> ||
+            absv_max < numeric_limits<Float>::min_squarable()) {
             absv /= absv_max;
             return pre::sqrt(pre::sum(pre::norm(*absv))) * absv_max;
         }
-        else {
+        else
             return pre::sqrt(pre::sum(pre::norm(*absv)));
-        }
     }
 
     Float normalize1(VecView<Field> v) {
@@ -144,9 +141,8 @@ struct Linalg {
             v /= len;
             return len;
         }
-        else {
+        else
             return 0;
-        }
     }
 
     Float normalize2(VecView<Field> v) {
@@ -154,9 +150,8 @@ struct Linalg {
             v /= len;
             return len;
         }
-        else {
+        else
             return 0;
-        }
     }
 
     /** \} */
@@ -190,7 +185,7 @@ struct Linalg {
                     s = -s;
                 }
             }
-            expect(pre::abs(a(j, j)) > FloatLimits::min_invertible(),
+            expect(pre::abs(a(j, j)) > numeric_limits<Float>::min_invertible(),
                    "non-singular matrix");
             // Factorize.
             Field fac = Float(1) / a(j, j);
@@ -246,7 +241,7 @@ struct Linalg {
     /// Factorize.
     ///
     /// \param[inout] a  Matrix t to factorize.
-    /// \param[out]   p  _Optional_. Permutation vector. 
+    /// \param[out]   p  _Optional_. Permutation vector.
     ///
     static void chol(MatView<Field> a, VecView<int> p = {}) {
         ASSERT(a.is_square());
@@ -254,7 +249,7 @@ struct Linalg {
         int n = a.size();
         if (p)
             load_iota(p);
-        Float eps = FloatLimits::min_invertible();
+        Float eps = numeric_limits<Float>::min_invertible();
         for (int k = 0; k < n; k++) {
             if (p) { // Optionally pivot.
                 int piv = find_pivot(a.diag()[Slice(k, n)]) + k;
@@ -264,7 +259,7 @@ struct Linalg {
                     a.swap_cols(k, piv);
                 }
                 if (k == 0)
-                    eps = pre::abs(a(0, 0)) * FloatLimits::epsilon();
+                    eps = pre::abs(a(0, 0)) * Eps<Float>;
                 // Positive semi-definite?
                 if (!(pre::abs(a(k, k)) > eps)) {
                     for (int i = k; i < n; i++)
@@ -306,7 +301,7 @@ struct Linalg {
         ASSERT(!p || a.size() == p.size());
         int m = b.rows();
         int n = b.cols();
-        auto _ = cache_.scoped_push();
+        auto push = cache_.scoped_push();
         auto y = cache_.template vector<Field>(m);
         for (int j = 0; j < n; j++) {
             // Solve R*y = b.
@@ -386,7 +381,7 @@ struct Linalg {
         auto n = SliceInt(x.cols());
         if (s >= 0 && s < m && //
             t >= 0 && t < n) {
-            auto _ = cache_.scoped_push();
+            auto push = cache_.scoped_push();
             auto w = householderl00(x(s | m, t | n));
             if (!y.empty())
                 householderl_reflection(w, y(s | m, 0 | m)); // Accumulate
@@ -430,8 +425,8 @@ struct Linalg {
         int itr = 0;
         while (1) {
             // Find target indices.
-            Float thresh = pre::max(pre::abs(*x.diag(0))) *
-                           (FloatLimits::epsilon() * Float(8));
+            Float thresh =
+                    pre::max(pre::abs(*x.diag(0))) * (Eps<Float> * Float(8));
             int s = 0;
             while (s < n - 1 && pre::abs(x.diag(1)[s]) < thresh)
                 s++;
