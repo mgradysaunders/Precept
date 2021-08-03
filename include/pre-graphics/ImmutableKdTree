@@ -31,8 +31,8 @@
 #ifndef PRE_GRAPHICS_IMMUTABLE_KD_TREE
 #define PRE_GRAPHICS_IMMUTABLE_KD_TREE
 
-#include <pre/memory>
 #include <pre-graphics/Bound>
+#include <pre-graphics/GrowableStack>
 
 namespace pre {
 
@@ -42,8 +42,63 @@ class ImmutableKdTree {
 
   public:
     using Box = Bound<float, Dim>;
+
     using Point = Array<float, Dim>;
+
+    struct Node {
+        Point point;
+        std::uint32_t index = 0;
+        std::uint32_t right = 0;
+        std::uint8_t left = 0;
+        std::uint8_t axis = 0;
+
+        void serialize(auto& serializer) {
+            serializer <=> point;
+            serializer <=> index;
+            serializer <=> right;
+            serializer <=> left;
+            serializer <=> axis;
+        }
+    };
+
+    struct Item {
+        std::uint32_t index;
+        Point point;
+    };
+
+    using Nodes = std::vector<Node>;
+    using Items = std::vector<Item>;
+
+  public:
+    void build(Items& items);
+
+    template <std::forward_iterator Iterator, std::invocable<Iterator> Cast>
+    void build(Iterator from, Iterator to, Cast&& cast) {
+        Items items;
+        items.reserve(std::distance(from, to));
+        for (Iterator curr = from; curr != to; ++curr) {
+            Item& item = items.emplace_back();
+            item.index = items.size() - 1;
+            item.point = std::invoke(std::forward<Cast>(cast), curr);
+        }
+        build(items);
+    }
+
+    void clear() {
+        nodes.clear();
+    }
+
+  public:
+    Nodes nodes;
+
+    void serialize(auto& serializer) {
+        serializer <=> nodes;
+    }
 };
+
+using ImmutableKdTree2 = ImmutableKdTree<2>;
+
+using ImmutableKdTree3 = ImmutableKdTree<3>;
 
 } // namespace pre
 

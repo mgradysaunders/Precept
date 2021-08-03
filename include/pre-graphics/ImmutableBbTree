@@ -31,7 +31,6 @@
 #ifndef PRE_GRAPHICS_IMMUTABLE_BB_TREE
 #define PRE_GRAPHICS_IMMUTABLE_BB_TREE
 
-#include <pre/memory>
 #include <pre-graphics/Bound>
 #include <pre-graphics/GrowableStack>
 
@@ -58,8 +57,6 @@ class ImmutableBbTree {
         };
         /// If leaf, item count.
         std::uint8_t count;
-        /// If branch, split axis.
-        std::uint8_t split_axis;
 
         constexpr bool is_leaf() const noexcept {
             return count != 0;
@@ -80,12 +77,11 @@ class ImmutableBbTree {
             serializer <=> box;
             serializer <=> right;
             serializer <=> count;
-            serializer <=> split_axis;
         }
     };
 
     struct Item {
-        int index = 0;
+        std::uint32_t index = 0;
         Box box;
         Point box_center;
     };
@@ -94,7 +90,23 @@ class ImmutableBbTree {
     using Items = std::vector<Item>;
 
   public:
-    void build(int leaf_limit, Items& items);
+    void build(Items& items, int leaf_limit = 4);
+
+    template <std::forward_iterator Iterator, std::invocable<Iterator> Cast>
+    void build(Iterator from, Iterator to, Cast&& cast, int leaf_limit = 4) {
+        Items items;
+        items.reserve(std::distance(from, to));
+        for (Iterator curr = from; curr != to; ++curr) {
+            Item& item = items.emplace_back();
+            item.index = items.size() - 1;
+            item.box = std::invoke(std::forward<Cast>(cast), curr);
+            item.box_center = item.box.center();
+        }
+        build(items, leaf_limit);
+        std::vector values(from, to);
+        for (const Item& item : items)
+            *from++ = values[item.index];
+    }
 
     void clear() {
         nodes.clear();
@@ -137,12 +149,12 @@ class ImmutableBbTree {
         visit(RayTester<Box>(ray), std::forward<Visitor>(visitor));
     }
 
+  public:
+    Nodes nodes;
+
     void serialize(auto& serializer) {
         serializer <=> nodes;
     }
-
-  public:
-    Nodes nodes;
 };
 
 using ImmutableBbTree2 = ImmutableBbTree<2>;

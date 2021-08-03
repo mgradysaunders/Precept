@@ -31,7 +31,6 @@
 #ifndef PRE_GRAPHICS_DYNAMIC_KD_TREE
 #define PRE_GRAPHICS_DYNAMIC_KD_TREE
 
-#include <pre/memory>
 #include <pre-graphics/Bound>
 #include <pre-graphics/GrowableStack>
 #include <pre-graphics/UserData>

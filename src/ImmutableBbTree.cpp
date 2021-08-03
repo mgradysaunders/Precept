@@ -1,3 +1,4 @@
+#include <pre/memory>
 #include <pre-graphics/ImmutableBbTree>
 
 namespace pre {
@@ -8,10 +9,10 @@ class ImmutableBbTreeBuilder {
     static_assert(Dim == 2 or Dim == 3);
 
   public:
-    using Bvh = ImmutableBbTree<Dim>;
-    using Box = typename Bvh::Box;
-    using Item = typename Bvh::Item;
-    using Items = typename Bvh::Items;
+    using BbTree = ImmutableBbTree<Dim>;
+    using Box = typename BbTree::Box;
+    using Item = typename BbTree::Item;
+    using Items = typename BbTree::Items;
 
     struct Node {
         Box box = {};           ///< Box.
@@ -157,28 +158,25 @@ class ImmutableBbTreeBuilder {
     /// Collapse.
     static void collapse(Node* from, auto& nodes) {
         ASSERT(from);
-        nodes.emplace_back();
-        auto& node = nodes.back();
+        auto& node = nodes.emplace_back();
         node.box = from->box;
         if (from->item_count > 0) {
             ASSERT(not from->left);
             ASSERT(not from->right);
             node.first = from->first_item;
             node.count = from->item_count;
-            node.split_axis = 0;
         }
         else {
             collapse(from->left, nodes);
             node.right = &nodes.back() - &node + 1;
             node.count = 0;
-            node.split_axis = from->split_axis;
             collapse(from->right, nodes);
         }
     }
 };
 
 template <size_t Dim>
-inline void ImmutableBbTree<Dim>::build(int leaf_limit, Items& items) {
+inline void ImmutableBbTree<Dim>::build(Items& items, int leaf_limit) {
     if (leaf_limit < 1)
         leaf_limit = 1;
 
