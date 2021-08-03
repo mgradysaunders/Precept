@@ -93,10 +93,22 @@ class Image {
 
     Image(Image&&) = default;
 
+    template <concepts::image_data Data>
+    Image(ArrayView<Data, 4> new_data, Array<Wrap, 3> new_wrap = {})
+        : wrap(new_wrap) {
+        resize(Dims{new_data.sizes[0], //
+                    new_data.sizes[1], //
+                    new_data.sizes[2], //
+                    new_data.sizes[3]},
+               Type_convert<Data>());
+        if (!empty())
+            view<Data>() = *new_data;
+    }
+
     Image(Dims new_dims,
           Type new_type,
           const void* new_data = nullptr,
-          const Array<Wrap, 3>& new_wrap = {})
+          Array<Wrap, 3> new_wrap = {})
         : wrap(new_wrap) {
         resize(new_dims, new_type, new_data);
     }
