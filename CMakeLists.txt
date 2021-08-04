@@ -49,6 +49,7 @@ target_include_directories(
 add_library(
     ${PROJECT_NAME}-graphics
     STATIC
+    src/AdjacencyLists.cpp
     src/AnimationCurve.cpp
     src/DynamicBbTree.cpp
     src/DynamicKdTree.cpp

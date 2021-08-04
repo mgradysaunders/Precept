@@ -1,0 +1,238 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_ADJACENCY_LISTS
+#define PRE_GRAPHICS_ADJACENCY_LISTS
+
+#include <vector>
+#include <pre/meta>
+#include <pre-graphics/UserData>
+
+namespace pre {
+
+class AdjacencyLists {
+  public:
+    using Int = std::int32_t;
+
+    static constexpr Int Nil = -1;
+
+    struct Node {
+        Int next = Nil;
+        Int link_fwd = Nil;
+        Int link_rev = Nil;
+        UserData userdata = {};
+    };
+
+    struct Link {
+        Int next = Nil;
+        Int node = Nil;
+    };
+
+    using Nodes = std::vector<Node>;
+
+    using Links = std::vector<Link>;
+
+  public:
+    AdjacencyLists() = default;
+
+    AdjacencyLists(const AdjacencyLists&) = default;
+
+    AdjacencyLists(AdjacencyLists&&) = default;
+
+    AdjacencyLists& operator=(const AdjacencyLists&) = default;
+
+    AdjacencyLists& operator=(AdjacencyLists&&) = default;
+
+  public:
+    /// Insert node.
+    Int insert(UserData userdata = {}) {
+        Int node = private_allocate_node();
+        nodes_[node].userdata = userdata;
+        return node;
+    }
+
+    /// Disconnect and remove node.
+    void remove(Int node) {
+        disconnect(node);
+        private_deallocate_node(node);
+    }
+
+    void clear() noexcept {
+        nodes_.clear();
+        links_.clear();
+        free_node_ = Nil;
+        free_link_ = Nil;
+    }
+
+    void clear_connections() noexcept {
+        // TODO
+    }
+
+    size_t memory_usage() const noexcept {
+        return nodes_.capacity() * sizeof(Node) +
+               links_.capacity() * sizeof(Link);
+    }
+
+    /// Connect 1-way. Existing connections will not be duplicated.
+    void connect1(Int node0, Int node1) {
+        private_connect(node0, node1, &Node::link_fwd);
+        private_connect(node1, node0, &Node::link_rev);
+    }
+
+    /// Connect 2-way. Existing connections will not be duplicated.
+    void connect2(Int node0, Int node1) {
+        connect1(node0, node1);
+        connect1(node1, node0);
+    }
+
+    /// Disconnect 1-way. No-op if no connection exists.
+    void disconnect1(Int node0, Int node1) {
+        private_disconnect(node0, node1, &Node::link_fwd);
+        private_disconnect(node1, node0, &Node::link_rev);
+    }
+
+    /// Disconnect 2-way. No-op if no connection exists.
+    void disconnect2(Int node0, Int node1) {
+        disconnect1(node0, node1);
+        disconnect1(node1, node0);
+    }
+
+    /// Disconnect everything.
+    void disconnect(Int node0) {
+        for (Int node1 : neighbors(node0))
+            disconnect1(node0, node1);
+        for (Int node1 : conjugate_neighbors(node0))
+            disconnect1(node1, node0);
+    }
+
+    struct LinkIterator {
+      public:
+        typedef const Int value_type;
+
+        typedef const Int& reference;
+
+        typedef std::ptrdiff_t difference_type;
+
+        typedef std::forward_iterator_tag iterator_category;
+
+        constexpr LinkIterator() noexcept = default;
+
+        constexpr LinkIterator(const Links* links, Int link) noexcept
+            : links_(links), link_(link) {
+            if (link_ != Nil)
+                next_ = (*links)[link_].next;
+        }
+
+        LinkIterator& operator++() noexcept {
+            link_ = next_;
+            next_ = (*links_)[link_].next;
+            return *this;
+        }
+
+        LinkIterator operator++(int) noexcept {
+            LinkIterator copy = *this;
+            ++*this;
+            return copy;
+        }
+
+        const Int& operator*() const noexcept {
+            return (*links_)[link_].node;
+        }
+
+        constexpr bool operator==(const LinkIterator& other) const noexcept {
+            return link_ == other.link_;
+        }
+
+        constexpr bool operator!=(const LinkIterator& other) const noexcept {
+            return link_ != other.link_;
+        }
+
+      private:
+        const Links* links_ = nullptr;
+
+        Int link_ = Nil;
+
+        Int next_ = Nil;
+
+        friend class AdjacencyLists;
+    };
+
+    IteratorRange<LinkIterator> neighbors(Int node) const noexcept {
+        return IteratorRange(
+            LinkIterator(&links_, nodes_[node].link_fwd),
+            LinkIterator(&links_, Nil));
+    }
+
+    IteratorRange<LinkIterator> conjugate_neighbors(Int node) const noexcept {
+        return IteratorRange(
+            LinkIterator(&links_, nodes_[node].link_rev),
+            LinkIterator(&links_, Nil));
+    }
+
+    Node& operator[](Int node) noexcept {
+        return nodes_[node];
+    }
+
+    const Node& operator[](Int node) const noexcept {
+        return nodes_[node];
+    }
+
+  private:
+    Nodes nodes_;
+
+    Links links_;
+
+    Int free_node_ = Nil;
+
+    Int free_link_ = Nil;
+
+  private:
+    Int private_allocate_node();
+
+    Int private_allocate_link();
+
+    void private_deallocate_node(Int node) {
+        nodes_[node].next = free_node_;
+        free_node_ = node;
+    }
+
+    void private_deallocate_link(Int link) {
+        links_[link].next = free_link_;
+        free_link_ = link;
+    }
+
+    void private_connect(Int node0, Int node1, Int Node::*list);
+
+    void private_disconnect(Int node0, Int node1, Int Node::*list);
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_ADJACENCY_LISTS
