@@ -31,7 +31,6 @@
 #ifndef PRE_GRAPHICS_DYNAMIC_BB_TREE
 #define PRE_GRAPHICS_DYNAMIC_BB_TREE
 
-#include <pre/memory>
 #include <pre-graphics/Bound>
 #include <pre-graphics/GrowableStack>
 #include <pre-graphics/UserData>
@@ -63,7 +62,7 @@ class DynamicBbTree {
         };
         Int child0 = Nil;
         Int child1 = Nil;
-        Int height = 0;
+        Int height = -1;
         UserData userdata = {};
 
         constexpr bool is_leaf() const noexcept {

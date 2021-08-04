@@ -1,10 +1,14 @@
 #include <pre-graphics/DynamicKdTree>
 
+#include "GrowPoolVector.h"
+
 namespace pre {
 
 template <size_t Dim>
 typename DynamicKdTree<Dim>::Box DynamicKdTree<Dim>::region(Int node) const {
     Box box = box_;
+    Point& min_point = box[0];
+    Point& max_point = box[1];
     Array<bool, Dim> min_done = {};
     Array<bool, Dim> max_done = {};
     Point point = nodes_[node].point;
@@ -13,14 +17,15 @@ typename DynamicKdTree<Dim>::Box DynamicKdTree<Dim>::region(Int node) const {
          parent = nodes_[parent].parent) {
         const Node& ref = nodes_[parent];
         if (point < ref) {
-            minimize(box[1][ref.axis], ref.threshold());
+            minimize(max_point[ref.axis], ref.threshold());
             max_done[ref.axis] = true;
         }
         else {
-            maximize(box[0][ref.axis], ref.threshold());
+            maximize(min_point[ref.axis], ref.threshold());
             min_done[ref.axis] = true;
         }
-        if (min_done.all() and max_done.all())
+        if (min_done.all() and //
+            max_done.all())
             break;
     }
     return box;
@@ -28,7 +33,7 @@ typename DynamicKdTree<Dim>::Box DynamicKdTree<Dim>::region(Int node) const {
 
 template <size_t Dim>
 typename DynamicKdTree<Dim>::Nearest DynamicKdTree<Dim>::nearest(
-        Point point) const {
+    Point point) const {
     Nearest near;
     GrowableStack<Int> todo;
     if (root_ != Nil)
@@ -59,7 +64,7 @@ typename DynamicKdTree<Dim>::Nearest DynamicKdTree<Dim>::nearest(
 }
 template <size_t Dim>
 void DynamicKdTree<Dim>::nearest(
-        Point point, IteratorRange<Nearest*> near) const {
+    Point point, IteratorRange<Nearest*> near) const {
     if (near.size() == 0)
         return;
     if (near.size() == 1) {
@@ -102,29 +107,18 @@ void DynamicKdTree<Dim>::nearest(
 
 template <size_t Dim>
 typename DynamicKdTree<Dim>::Int DynamicKdTree<Dim>::private_allocate() {
-    if (free_ == Nil) {
-        Int nodes_size = nodes_.size();
-        if (nodes_.size() == 0)
-            nodes_.resize(32);
-        else
-            nodes_.resize(nodes_.size() * 2);
-        for (Int node = nodes_size; node < Int(nodes_.size()); node++) {
-            nodes_[node].next = node + 1;
-            nodes_[node].height = -1;
-        }
-        nodes_.back().next = Nil;
-        free_ = nodes_size;
-    }
+    if (free_ == Nil)
+        free_ = GrowPoolVector(nodes_, &Node::next);
     Int node = free_;
     free_ = nodes_[node].next;
-    node_count_++;
     nodes_[node] = Node();
+    node_count_++;
     return node;
 }
 
 template <size_t Dim>
 typename DynamicKdTree<Dim>::Int DynamicKdTree<Dim>::private_select_axis(
-        Int node) {
+    Int node) {
     Node& node_ref = nodes_[node];
     Point cost = Point(Inf<float>);
     for (Int axis = 0; axis < Int(Dim); axis++) {
@@ -254,7 +248,7 @@ void DynamicKdTree<Dim>::private_rebalance() {
 
 template <size_t Dim>
 typename DynamicKdTree<Dim>::Int DynamicKdTree<Dim>::private_rebalance(
-        IteratorRange<Int*> nodes) {
+    IteratorRange<Int*> nodes) {
     if (nodes.size() == 0)
         return Nil;
     if (nodes.size() == 1)
@@ -265,9 +259,9 @@ typename DynamicKdTree<Dim>::Int DynamicKdTree<Dim>::private_rebalance(
     Int axis = box.extent().argmax();
     Int* middle = nodes.begin() + nodes.size() / 2;
     std::nth_element(
-            nodes.begin(), middle, nodes.end(), [&](Int lhs, Int rhs) {
-                return nodes_[lhs].point[axis] < nodes_[rhs].point[axis];
-            });
+        nodes.begin(), middle, nodes.end(), [&](Int lhs, Int rhs) {
+            return nodes_[lhs].point[axis] < nodes_[rhs].point[axis];
+        });
     Int child0 = private_rebalance({nodes.begin(), middle});
     Int child1 = private_rebalance({middle + 1, nodes.end()});
     Node& middle_ref = nodes_[*middle];

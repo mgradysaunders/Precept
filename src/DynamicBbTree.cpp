@@ -1,23 +1,13 @@
-#include <iostream>
 #include <pre-graphics/DynamicBbTree>
+
+#include "GrowPoolVector.h"
 
 namespace pre {
 
 template <size_t Dim>
 typename DynamicBbTree<Dim>::Int DynamicBbTree<Dim>::private_allocate() {
-    if (free_ == Nil) {
-        Int nodes_size = nodes_.size();
-        if (nodes_.size() == 0)
-            nodes_.resize(32);
-        else
-            nodes_.resize(nodes_.size() * 2);
-        for (Int node = nodes_size; node < Int(nodes_.size()); node++) {
-            nodes_[node].next = node + 1;
-            nodes_[node].height = -1;
-        }
-        nodes_.back().next = Nil;
-        free_ = nodes_size;
-    }
+    if (free_ == Nil)
+        free_ = GrowPoolVector(nodes_, &Node::next);
     Int node = free_;
     free_ = nodes_[node].next;
     nodes_[node] = Node();
