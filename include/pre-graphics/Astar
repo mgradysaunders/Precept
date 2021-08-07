@@ -39,7 +39,7 @@
 namespace pre {
 
 template <typename Node>
-struct astar {
+struct Astar {
   public:
     template <typename K, typename V>
     using Map = std::
@@ -67,107 +67,104 @@ struct astar {
     };
     using NodeInfo = Map<Node, Info>;
     using NodeInfoIterator = typename NodeInfo::iterator;
-};
 
-/// A skeleton algorithm for A* path finding.
-///
-/// \param[out] path      The output path nodes.
-/// \param[in] source     The source node to start from.
-/// \param[in] target     The target node to seek.
-/// \param[in] cost       The cost function, to measure edge weight.
-/// \param[in] heuristic  The heuristic function, to estimating remaining cost.
-/// \param[in] neighbors  The routine to lookup neighboring nodes.
-///
-template <
-    typename Node,
-    typename NodeAlloc,
-    std::invocable<const Node&, const Node&> Cost,
-    std::invocable<const Node&> Heuristic,
-    std::invocable<const Node&> Neighbors>
-inline void Astar(
-    std::vector<Node, NodeAlloc>& path,
-    const Node& source,
-    const Node& target,
-    Cost&& cost,
-    Heuristic&& heuristic,
-    Neighbors&& neighbors,
-    float eps = 0,
-    float max_depth = 0) {
-    float inv_depth = 0;
-    if (max_depth > 0)
-        inv_depth = 1 / max_depth;
+    /// A skeleton algorithm for A* path finding.
+    ///
+    /// \param[out] path      The output path nodes.
+    /// \param[in] source     The source node to start from.
+    /// \param[in] target     The target node to seek.
+    /// \param[in] cost       The traversal cost.
+    /// \param[in] heuristic  The heuristic to estimate remaining cost.
+    /// \param[in] neighbors  The routine to lookup neighbors.
+    ///
+    template <
+        typename NodeAlloc,
+        std::invocable<const Node&, const Node&> Cost,
+        std::invocable<const Node&> Heuristic,
+        std::invocable<const Node&> Neighbors>
+    static void go(
+        std::vector<Node, NodeAlloc>& path,
+        const Node& source,
+        const Node& target,
+        Cost&& cost,
+        Heuristic&& heuristic,
+        Neighbors&& neighbors,
+        float eps = 0,
+        float max_depth = 0) {
+        float inv_depth = 0;
+        if (max_depth > 0)
+            inv_depth = 1 / max_depth;
 
-    using Prev = typename astar<Node>::Prev;
-    using Info = typename astar<Node>::Info;
-    using NodeInfo = typename astar<Node>::NodeInfo;
-    using NodeInfoIterator = typename astar<Node>::NodeInfoIterator;
-    GrowableHeap todo(
-        capture_type<NodeInfoIterator>(), //
-        capture_size<64>(),               //
-        [](const NodeInfoIterator& lhs,   //
-           const NodeInfoIterator& rhs) {
-            return lhs->second.fscore > rhs->second.fscore;
-        });
-    NodeInfo info;
-    Info source_info;
-    source_info.depth = 0;
-    source_info.fscore =
-        std::invoke(std::forward<Heuristic>(heuristic), source);
-    source_info.gscore = 0;
-    if constexpr (std::same_as<Prev, UserData>)
-        source_info.prev = info.end();
-    todo.push(info.insert({source, source_info}).first);
-    NodeInfoIterator node = {};
-    bool fail = true;
-    path.clear();
-    path.reserve(64);
-    while (not todo.empty()) {
-        node = todo.pop();
-        if (node->first == target) {
-            fail = false;
-            break;
-        }
-        for (const Node& neighbor :
-             std::invoke(std::forward<Neighbors>(neighbors), node->first)) {
-            NodeInfoIterator next = info.insert({neighbor, {}}).first;
-            float gscore = node->second.gscore + std::invoke(
-                                                     std::forward<Cost>(cost),
-                                                     node->first, next->first);
-            if (next->second.gscore > gscore) {
-                next->second.gscore = gscore;
-                next->second.depth = node->second.depth;
-                next->second.depth++;
-                float hscore = std::invoke(
-                    std::forward<Heuristic>(heuristic), next->first);
-                float wscore = 1 - next->second.depth * inv_depth;
-                if (wscore < 0)
-                    wscore = 0;
-                wscore = 1 + eps * wscore;
-                next->second.fscore = gscore + wscore * hscore;
-                if constexpr (std::same_as<Prev, UserData>)
-                    next->second.prev = node;
-                else
-                    next->second.prev = node->first;
-                if (std::find(todo.begin(), todo.end(), next) == todo.end())
-                    todo.push(next);
+        GrowableHeap todo(
+            capture_type<NodeInfoIterator>(), //
+            capture_size<64>(),               //
+            [](const NodeInfoIterator& lhs,   //
+               const NodeInfoIterator& rhs) {
+                return lhs->second.fscore > rhs->second.fscore;
+            });
+        NodeInfo info;
+        Info source_info;
+        source_info.depth = 0;
+        source_info.fscore =
+            std::invoke(std::forward<Heuristic>(heuristic), source);
+        source_info.gscore = 0;
+        if constexpr (std::same_as<Prev, UserData>)
+            source_info.prev = info.end();
+        todo.push(info.insert({source, source_info}).first);
+        NodeInfoIterator node = {};
+        bool fail = true;
+        path.clear();
+        path.reserve(64);
+        while (not todo.empty()) {
+            node = todo.pop();
+            if (node->first == target) {
+                fail = false;
+                break;
+            }
+            for (const Node& neighbor : std::invoke(
+                     std::forward<Neighbors>(neighbors), node->first)) {
+                NodeInfoIterator next = info.insert({neighbor, {}}).first;
+                float gscore =
+                    node->second.gscore +
+                    std::invoke(
+                        std::forward<Cost>(cost), node->first, next->first);
+                if (next->second.gscore > gscore) {
+                    next->second.gscore = gscore;
+                    next->second.depth = node->second.depth;
+                    next->second.depth++;
+                    float hscore = std::invoke(
+                        std::forward<Heuristic>(heuristic), next->first);
+                    float wscore = 1 - next->second.depth * inv_depth;
+                    if (wscore < 0)
+                        wscore = 0;
+                    wscore = 1 + eps * wscore;
+                    next->second.fscore = gscore + wscore * hscore;
+                    if constexpr (std::same_as<Prev, UserData>)
+                        next->second.prev = node;
+                    else
+                        next->second.prev = node->first;
+                    if (std::find(todo.begin(), todo.end(), next) ==
+                        todo.end())
+                        todo.push(next);
+                }
             }
         }
-    }
-    if (fail)
-        return;
-    while (node != info.end()) {
-        path.emplace_back(node->first);
-        if constexpr (std::same_as<Prev, UserData>)
-            node = node->second.prev.template as<NodeInfoIterator>();
-        else {
-            if (node->second.depth > 0)
-                node = info.find(node->second.prev);
-            else
-                break;
+        if (fail)
+            return;
+        while (node != info.end()) {
+            path.emplace_back(node->first);
+            if constexpr (std::same_as<Prev, UserData>)
+                node = node->second.prev.template as<NodeInfoIterator>();
+            else {
+                if (node->second.depth > 0)
+                    node = info.find(node->second.prev);
+                else
+                    break;
+            }
         }
+        std::reverse(path.begin(), path.end());
     }
-    std::reverse(path.begin(), path.end());
-}
+};
 
 } // namespace pre
 
