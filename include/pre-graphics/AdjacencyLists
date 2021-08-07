@@ -196,6 +196,12 @@ class AdjacencyLists {
             LinkIterator(&links_, Nil));
     }
 
+    template <typename User>
+    auto userdata_as() const noexcept {
+        return std::views::transform(
+            [this](Int node) { return nodes_[node].userdata.as<User>(); });
+    }
+
     Node& operator[](Int node) noexcept {
         return nodes_[node];
     }

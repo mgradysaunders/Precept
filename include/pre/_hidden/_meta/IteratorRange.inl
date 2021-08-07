@@ -14,7 +14,7 @@ class IteratorRange {
     typedef typename std::iterator_traits<Iterator>::reference reference;
 
     typedef typename std::iterator_traits<Iterator>::difference_type
-            difference_type;
+        difference_type;
 
   public:
     constexpr IteratorRange() = default;
@@ -81,6 +81,12 @@ class IteratorRange {
     template <typename Other>
     constexpr operator IteratorRange<Other>() {
         return {Other(begin_), Other(end_)};
+    }
+
+    template <typename Other>
+    constexpr auto operator|(Other&& other) const noexcept {
+        return std::ranges::subrange(begin_, end_) |
+               std::forward<Other>(other);
     }
 
   private:

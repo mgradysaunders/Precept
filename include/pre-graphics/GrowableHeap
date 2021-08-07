@@ -28,47 +28,69 @@
  */
 /*-*-*-*-*-*-*/
 #pragma once
-#ifndef PRE_GRAPHICS_USER_DATA
-#define PRE_GRAPHICS_USER_DATA
+#ifndef PRE_GRAPHICS_GROWABLE_HEAP
+#define PRE_GRAPHICS_GROWABLE_HEAP
 
-#include <pre/meta>
+#include <pre-graphics/GrowableStack>
 
 namespace pre {
 
-/// A helper struct to represent user data.
-///
-/// This is meant to be unsafe/dumb data of trivial type, less
-/// than or equal to the size of a pointer.
-///
-struct UserData {
-    constexpr UserData() noexcept = default;
+template <
+    typename Value,
+    size_t Size = 64,
+    typename Predicate = std::less<Value>>
+struct GrowableHeap : GrowableStack<Value, Size> {
+  public:
+    using Super = GrowableStack<Value, Size>;
 
-    template <concepts::trivial Data>
-    constexpr UserData(const Data& data) noexcept {
-        as<Data>() = data;
+    constexpr GrowableHeap() noexcept = default;
+
+    constexpr GrowableHeap(Predicate&& predicate) noexcept
+        : predicate_(predicate) {
     }
 
-    template <concepts::trivial Data>
-    constexpr UserData& operator=(const Data& data) noexcept {
-        as<Data>() = data;
-        return *this;
+    /// Allow for CTAD with lambdas
+    constexpr GrowableHeap(
+        capture_type<Value>,
+        capture_size<Size>,
+        Predicate&& predicate) noexcept
+        : predicate_(predicate) {
     }
 
-    template <concepts::trivial Data>
-    constexpr Data& as() noexcept {
-        static_assert(sizeof(Data) <= sizeof(std::uintptr_t));
-        return *reinterpret_cast<Data*>(&data_[0]);
+    GrowableHeap(const GrowableHeap&) = delete;
+
+    GrowableHeap(GrowableHeap&&) = delete;
+
+  public:
+    /// \name Heap API
+    /** \{ */
+
+    constexpr void push(const Value& value) {
+        Super::push(value);
+        std::push_heap(
+            this->begin(), //
+            this->end(), predicate_);
     }
 
-    template <concepts::trivial Data>
-    constexpr const Data& as() const noexcept {
-        static_assert(sizeof(Data) <= sizeof(std::uintptr_t));
-        return *reinterpret_cast<const Data*>(&data_[0]);
+    constexpr Value pop() {
+        std::pop_heap(
+            this->begin(), //
+            this->end(), predicate_);
+        return Super::pop();
     }
 
-    alignas(alignof(void*)) std::byte data_[sizeof(void*)];
+    /** \} */
+
+  private:
+    Predicate predicate_;
 };
+
+template <typename Value, size_t Size = 64>
+using GrowableMinHeap = GrowableHeap<Value, Size, std::greater<Value>>;
+
+template <typename Value, size_t Size = 64>
+using GrowableMaxHeap = GrowableHeap<Value, Size, std::less<Value>>;
 
 } // namespace pre
 
-#endif // #ifndef PRE_GRAPHICS_USER_DATA
+#endif // #ifndef PRE_GRAPHICS_GROWABLE_HEAP

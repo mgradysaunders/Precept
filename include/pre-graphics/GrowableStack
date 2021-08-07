@@ -36,8 +36,8 @@
 
 namespace pre {
 
-template <typename Value, size_t StaticSize = 64>
-struct GrowableStack : ArrayLike<GrowableStack<Value, StaticSize>, Value> {
+template <typename Value, size_t Size = 64>
+struct GrowableStack : ArrayLike<GrowableStack<Value, Size>, Value> {
   public:
     constexpr GrowableStack() noexcept {
         stack_ = &array_[0];
@@ -99,7 +99,7 @@ struct GrowableStack : ArrayLike<GrowableStack<Value, StaticSize>, Value> {
     /// \name Stack API
     /** \{ */
 
-    void push(const Value& value) {
+    constexpr void push(const Value& value) {
         if (stack_capacity_ == stack_top_) {
             stack_capacity_ *= 2;
             Value* stack = alloc_.allocate(stack_capacity_);
@@ -111,7 +111,7 @@ struct GrowableStack : ArrayLike<GrowableStack<Value, StaticSize>, Value> {
         stack_[stack_top_++] = value;
     }
 
-    Value pop() {
+    constexpr Value pop() {
         ASSERT(stack_top_ > 0);
         return stack_[--stack_top_];
     }
@@ -119,10 +119,10 @@ struct GrowableStack : ArrayLike<GrowableStack<Value, StaticSize>, Value> {
     /** \} */
 
   private:
-    Value array_[StaticSize];
+    Value array_[Size];
     Value* stack_ = nullptr;
     size_t stack_top_ = 0;
-    size_t stack_capacity_ = StaticSize;
+    size_t stack_capacity_ = Size;
     std::allocator<Value> alloc_;
 };
 

@@ -104,7 +104,7 @@ struct to_floating_point;
 
 template <typename... T>
 using to_floating_point_t =
-        typename to_floating_point<std::common_type_t<T...>>::type;
+    typename to_floating_point<std::common_type_t<T...>>::type;
 
 template <std::integral T>
 struct to_floating_point<T> {
@@ -126,8 +126,14 @@ struct to_floating_point<T&> {
     using type = to_floating_point_t<T>; // Strip reference
 };
 
+template <typename>
+struct capture_type {};
+
+template <size_t>
+struct capture_size {};
+
 template <std::default_initializable T>
-constexpr decltype(auto) steal(T& x) {
+constexpr decltype(auto) steal(T& x) noexcept {
     return std::exchange(x, T());
 }
 
