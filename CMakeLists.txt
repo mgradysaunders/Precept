@@ -58,6 +58,7 @@ add_library(
     src/ImmutableBbTree.cpp
     src/ImmutableKdTree.cpp
     src/Microsurface.cpp
+    src/SunSky.cpp
     src/WavefrontObj.cpp
     )
 set_target_properties(
