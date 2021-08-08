@@ -307,7 +307,15 @@ inline Array<Float, 2> cct_to_xy(Float t) noexcept {
     return {x, y};
 }
 
-extern Array<float, 54, 3> illuminant_d_s;
+namespace cie_data {
+
+/// CIE Illuminant D (S0, S1, S2 components).
+extern Array<float, 54, 3> illuminant_d;
+
+/// CIE Illuminant F.
+extern Array<float, 12, 81> illuminant_f;
+
+} // namespace cie_data
 
 /// CIE Illuminant D (daylight) spectrum.
 ///
@@ -329,11 +337,34 @@ inline Float illuminant_d(Array<Float, 2> xy, Float lambda) noexcept {
     Float u = fract((lambda - 0.3) * 100, &k);
     Array<float, 3> s = catmull_rom(
         u, //
-        illuminant_d_s[clamp(k - 1, 0, 53)],
-        illuminant_d_s[clamp(k + 0, 0, 53)],
-        illuminant_d_s[clamp(k + 1, 0, 53)],
-        illuminant_d_s[clamp(k + 2, 0, 53)]);
+        cie_data::illuminant_d[clamp(k - 1, 0, 53)],
+        cie_data::illuminant_d[clamp(k + 0, 0, 53)],
+        cie_data::illuminant_d[clamp(k + 1, 0, 53)],
+        cie_data::illuminant_d[clamp(k + 2, 0, 53)]);
     return s[0] + m1 * s[1] + m2 * s[2];
+}
+
+/// CIE Illuminant F (fluorescent) spectrum.
+///
+/// \param[in] n
+/// ID between 1 and 12 inclusive.
+///
+/// \param[in] lambda
+/// Wavelength in micrometers.
+///
+template <std::floating_point Float>
+inline Float illuminant_f(int n, Float lambda) noexcept {
+    ASSERT(1 <= n and n < 13);
+    if (lambda < 0.38 or lambda > 0.78)
+        return 0;
+    int k = 0;
+    Float u = fract((lambda - 0.38) * 200, &k);
+    return catmull_rom(
+        u, //
+        cie_data::illuminant_f[n - 1][clamp(k - 1, 0, 81)],
+        cie_data::illuminant_f[n - 1][clamp(k + 0, 0, 81)],
+        cie_data::illuminant_f[n - 1][clamp(k + 1, 0, 81)],
+        cie_data::illuminant_f[n - 1][clamp(k + 2, 0, 81)]);
 }
 
 /// Planck's law.
