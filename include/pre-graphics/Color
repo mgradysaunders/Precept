@@ -40,46 +40,50 @@ namespace pre {
 template <std::floating_point Float>
 inline Float srgb_encode(Float v) noexcept {
     return v <= Float(0.0031308)
-                   ? Float(12.92) * v
-                   : Float(1.055) * pre::pow(v, 1 / Float(2.4)) - Float(0.055);
+               ? Float(12.92) * v
+               : Float(1.055) * pre::pow(v, 1 / Float(2.4)) - Float(0.055);
 }
 
 template <std::floating_point Float>
 inline Array<Float, 3> srgb_encode(const Array<Float, 3>& rgb) noexcept {
-    return {srgb_encode(rgb[0]), //
-            srgb_encode(rgb[1]), //
-            srgb_encode(rgb[2])};
+    return {
+        srgb_encode(rgb[0]), //
+        srgb_encode(rgb[1]), //
+        srgb_encode(rgb[2])};
 }
 
 template <std::floating_point Float>
 inline Array<Float, 4> srgb_encode(const Array<Float, 4>& rgba) noexcept {
-    return {srgb_encode(rgba[0]), //
-            srgb_encode(rgba[1]), //
-            srgb_encode(rgba[2]), //
-            rgba[3]};
+    return {
+        srgb_encode(rgba[0]), //
+        srgb_encode(rgba[1]), //
+        srgb_encode(rgba[2]), //
+        rgba[3]};
 }
 
 /// Decode linear RGB from sRGB.
 template <std::floating_point Float>
 inline Float srgb_decode(Float v) noexcept {
     return v <= Float(0.04045)
-                   ? v / Float(12.92)
-                   : pre::pow((v + Float(0.055)) / Float(1.055), Float(2.4));
+               ? v / Float(12.92)
+               : pre::pow((v + Float(0.055)) / Float(1.055), Float(2.4));
 }
 
 template <std::floating_point Float>
 inline Array<Float, 3> srgb_decode(const Array<Float, 3>& rgb) noexcept {
-    return {srgb_decode(rgb[0]), //
-            srgb_decode(rgb[1]), //
-            srgb_decode(rgb[2])};
+    return {
+        srgb_decode(rgb[0]), //
+        srgb_decode(rgb[1]), //
+        srgb_decode(rgb[2])};
 }
 
 template <std::floating_point Float>
 inline Array<Float, 4> srgb_decode(const Array<Float, 4>& rgba) noexcept {
-    return {srgb_decode(rgba[0]), //
-            srgb_decode(rgba[1]), //
-            srgb_decode(rgba[2]), //
-            rgba[3]};
+    return {
+        srgb_decode(rgba[0]), //
+        srgb_decode(rgba[1]), //
+        srgb_decode(rgba[2]), //
+        rgba[3]};
 }
 
 /// Fit of CIE 1931 X by Wyman et al.
@@ -155,9 +159,9 @@ inline Float wyman_z(Float lambda) {
 template <std::floating_point Float>
 inline Array<Float, 3> xyz_to_rgb(const Array<Float, 3>& xyz) noexcept {
     Array<Float, 3, 3> m = {
-            Float(+2.3706743), Float(-0.9000405), Float(-0.4706338), //
-            Float(-0.5138850), Float(+1.4253036), Float(+0.0885814), //
-            Float(+0.0052982), Float(-0.0146949), Float(+1.0093968)};
+        Float(+2.3706743), Float(-0.9000405), Float(-0.4706338), //
+        Float(-0.5138850), Float(+1.4253036), Float(+0.0885814), //
+        Float(+0.0052982), Float(-0.0146949), Float(+1.0093968)};
     return dot(m, xyz);
 }
 
@@ -177,9 +181,9 @@ inline Array<Float, 3> xyz_to_rgb(const Array<Float, 3>& xyz) noexcept {
 template <std::floating_point Float>
 inline Array<Float, 3> rgb_to_xyz(const Array<Float, 3>& rgb) noexcept {
     Array<Float, 3, 3> m = {
-            Float(0.4887180), Float(0.3106803), Float(0.2006017), //
-            Float(0.1762044), Float(0.8129847), Float(0.0108109), //
-            Float(0.0000000), Float(0.0102048), Float(0.9897952)};
+        Float(0.4887180), Float(0.3106803), Float(0.2006017), //
+        Float(0.1762044), Float(0.8129847), Float(0.0108109), //
+        Float(0.0000000), Float(0.0102048), Float(0.9897952)};
     return dot(m, rgb);
 }
 
@@ -203,21 +207,21 @@ inline Array<Float, 3> rgb_to_xyz(const Array<Float, 3>& rgb) noexcept {
 ///
 template <std::floating_point Float>
 inline Array<Float, 3, 3> rgb_to_xyz(
-        const Array<Float, 2>& cr,
-        const Array<Float, 2>& cg,
-        const Array<Float, 2>& cb,
-        const Array<Float, 3>& w) noexcept {
+    const Array<Float, 2>& cr,
+    const Array<Float, 2>& cg,
+    const Array<Float, 2>& cb,
+    const Array<Float, 3>& w) noexcept {
     Array<Float, 3, 3> m;
     Array<Float, 3, 3> a = {
-            cr[0] / cr[1],
-            cg[0] / cg[1],
-            cb[0] / cb[1],
-            Float(1),
-            Float(1),
-            Float(1),
-            (Float(1) - cr[0] - cr[1]) / cr[1],
-            (Float(1) - cg[0] - cg[1]) / cg[1],
-            (Float(1) - cb[0] - cb[1]) / cb[1]};
+        cr[0] / cr[1],
+        cg[0] / cg[1],
+        cb[0] / cb[1],
+        Float(1),
+        Float(1),
+        Float(1),
+        (Float(1) - cr[0] - cr[1]) / cr[1],
+        (Float(1) - cg[0] - cg[1]) / cg[1],
+        (Float(1) - cb[0] - cb[1]) / cb[1]};
     Array<Float, 3, 3> acof;
     acof[0] = cross(a[1], a[2]);
     acof[1] = cross(a[2], a[0]);
@@ -232,16 +236,18 @@ inline Array<Float, 3, 3> rgb_to_xyz(
 /// XYZ triple to xyY triple.
 template <std::floating_point Float>
 inline Array<Float, 3> xyz_to_xyy(const Array<Float, 3>& xyz) noexcept {
-    return {xyz[0] / xyz.sum(), //
-            xyz[1] / xyz.sum(), //
-            xyz[1]};
+    return {
+        xyz[0] / xyz.sum(), //
+        xyz[1] / xyz.sum(), //
+        xyz[1]};
 }
 
 /// xyY triple to XYZ triple.
 template <std::floating_point Float>
 inline Array<Float, 3> xyy_to_xyz(const Array<Float, 3>& xyy) noexcept {
-    return {xyy[2] / xyy[1] * xyy[0], xyy[2], //
-            xyy[2] / xyy[1] * (1 - xyy[0] - xyy[1])};
+    return {
+        xyy[2] / xyy[1] * xyy[0], xyy[2], //
+        xyy[2] / xyy[1] * (1 - xyy[0] - xyy[1])};
 }
 
 /// XYZ triple to Lab triple.
@@ -253,9 +259,10 @@ inline Array<Float, 3> xyz_to_lab(const Array<Float, 3>& xyz) noexcept {
         else
             return (t * Float(24389.0 / 27.0) + 16) / 116;
     };
-    return {116 * f(xyz[1]) - 16,          //
-            500 * (f(xyz[0]) - f(xyz[1])), //
-            200 * (f(xyz[1]) - f(xyz[2]))};
+    return {
+        116 * f(xyz[1]) - 16,          //
+        500 * (f(xyz[0]) - f(xyz[1])), //
+        200 * (f(xyz[1]) - f(xyz[2]))};
 }
 
 /// Lab triple to XYZ triple.
@@ -284,6 +291,49 @@ inline Array<Float, 3> rgb_to_lab(const Array<Float, 3>& rgb) noexcept {
 template <std::floating_point Float>
 inline Array<Float, 3> lab_to_rgb(const Array<Float, 3>& lab) noexcept {
     return xyz_to_rgb(lab_to_xyz(lab));
+}
+
+/// Color-correlated temperature (CCT) to chromaticity.
+///
+/// \param[in] t
+/// Blackbody temperature in degrees Kelvin.
+///
+template <std::floating_point Float>
+inline Array<Float, 2> cct_to_xy(Float t) noexcept {
+    Float x = t < 7000
+                  ? ((-4.6070e9 / t + 2.9678e6) / t + 0.09911e3) / t + 0.244063
+                  : ((-2.0064e9 / t + 1.9018e6) / t + 0.24748e3) / t + 0.23704;
+    Float y = -3 * x * x + 2.87 * x - 0.275;
+    return {x, y};
+}
+
+extern Array<float, 54, 3> illuminant_d_s;
+
+/// CIE Illuminant D (daylight) spectrum.
+///
+/// \param[in] xy
+/// Chromaticity.
+///
+/// \param[in] lambda
+/// Wavelength in micrometers.
+///
+template <std::floating_point Float>
+inline Float illuminant_d(Array<Float, 2> xy, Float lambda) noexcept {
+    Float m1 = -1.3515 - 1.7703 * xy[0] + 5.9114 * xy[1];
+    Float m2 = 0.0300 - 31.4424 * xy[0] + 30.0717 * xy[1];
+    m1 /= 0.0241 + 0.2562 * xy[0] - 0.7341 * xy[1];
+    m2 /= 0.0241 + 0.2562 * xy[0] - 0.7341 * xy[1];
+    if (lambda < 0.30 or lambda > 0.83)
+        return 0;
+    int k = 0;
+    Float u = fract((lambda - 0.3) * 100, &k);
+    Array<float, 3> s = catmull_rom(
+        u, //
+        illuminant_d_s[clamp(k - 1, 0, 53)],
+        illuminant_d_s[clamp(k + 0, 0, 53)],
+        illuminant_d_s[clamp(k + 1, 0, 53)],
+        illuminant_d_s[clamp(k + 2, 0, 53)]);
+    return s[0] + m1 * s[1] + m2 * s[2];
 }
 
 /// Planck's law.
