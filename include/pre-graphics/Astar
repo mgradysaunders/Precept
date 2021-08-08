@@ -67,6 +67,7 @@ struct Astar {
     };
     using NodeInfo = Map<Node, Info>;
     using NodeInfoIterator = typename NodeInfo::iterator;
+    using Path = std::vector<Node>;
 
     /// A skeleton algorithm for A* path finding.
     ///
@@ -78,12 +79,11 @@ struct Astar {
     /// \param[in] neighbors  The routine to lookup neighbors.
     ///
     template <
-        typename NodeAlloc,
         std::invocable<const Node&, const Node&> Cost,
         std::invocable<const Node&> Heuristic,
         std::invocable<const Node&> Neighbors>
     static void go(
-        std::vector<Node, NodeAlloc>& path,
+        Path& path,
         const Node& source,
         const Node& target,
         Cost&& cost,
@@ -112,13 +112,13 @@ struct Astar {
             source_info.prev = info.end();
         todo.push(info.insert({source, source_info}).first);
         NodeInfoIterator node = {};
-        bool fail = true;
+        bool success = false;
         path.clear();
         path.reserve(64);
         while (not todo.empty()) {
             node = todo.pop();
             if (node->first == target) {
-                fail = false;
+                success = true;
                 break;
             }
             for (const Node& neighbor : std::invoke(
@@ -149,20 +149,20 @@ struct Astar {
                 }
             }
         }
-        if (fail)
-            return;
-        while (node != info.end()) {
-            path.emplace_back(node->first);
-            if constexpr (std::same_as<Prev, UserData>)
-                node = node->second.prev.template as<NodeInfoIterator>();
-            else {
-                if (node->second.depth > 0)
-                    node = info.find(node->second.prev);
-                else
-                    break;
+        if (success) {
+            while (node != info.end()) {
+                path.emplace_back(node->first);
+                if constexpr (std::same_as<Prev, UserData>)
+                    node = node->second.prev.template as<NodeInfoIterator>();
+                else {
+                    if (node->second.depth > 0)
+                        node = info.find(node->second.prev);
+                    else
+                        break;
+                }
             }
+            std::reverse(path.begin(), path.end());
         }
-        std::reverse(path.begin(), path.end());
     }
 };
 
