@@ -39,10 +39,15 @@ template <std::floating_point Float>
 struct Converger {
   public:
     int max_iters = 100;
+
     mutable int num_iters = 0;
+
     Float target = 0;
+
     Float cutoff = 1e-6;
+
     std::optional<Float> lower_bound = std::nullopt;
+
     std::optional<Float> upper_bound = std::nullopt;
 
   public:
@@ -51,11 +56,12 @@ struct Converger {
     constexpr bool operator()(Float& xk, F&& f) const {
         ASSERT(lower_bound);
         ASSERT(upper_bound);
-        Float x0 = *lower_bound, f0 = std::invoke(f, x0) - target;
+        Float x0 = *lower_bound;
         Float x1 = *upper_bound;
+        Float f0 = std::invoke(std::forward<F>(f), x0) - target;
         for (num_iters = 0; num_iters < max_iters; num_iters++) {
             xk = (x0 + x1) * Float(0.5);
-            Float fk = std::invoke(f, xk) - target;
+            Float fk = std::invoke(std::forward<F>(f), xk) - target;
             if (std::abs(fk) < cutoff)
                 return true;
 
@@ -73,11 +79,11 @@ struct Converger {
         bool clamped_lower = false;
         bool clamped_upper = false;
         for (num_iters = 0; num_iters < max_iters; num_iters++) {
-            Float fk = std::invoke(f, xk) - target;
+            Float fk = std::invoke(std::forward<F>(f), xk) - target;
             if (std::abs(fk) < cutoff)
                 return true;
 
-            xk -= fk / std::invoke(g, xk) * m;
+            xk -= fk / std::invoke(std::forward<G>(g), xk) * m;
             if (std::isfinite(xk) == false)
                 break;
 
