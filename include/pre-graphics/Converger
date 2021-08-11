@@ -38,16 +38,22 @@ namespace pre {
 template <std::floating_point Float>
 struct Converger {
   public:
-    int max_iters = 100;
-
+    /// Number of iterations used in converger call, for debugging.
     mutable int num_iters = 0;
 
+    /// Maximum number of iterations.
+    int max_iters = 100;
+
+    /// Target value.
     Float target = 0;
 
+    /// Cutoff, meaning absolute error tolerance.
     Float cutoff = 1e-6;
 
+    /// Lower bound on solution.
     std::optional<Float> lower_bound = std::nullopt;
 
+    /// Upper bound on solution.
     std::optional<Float> upper_bound = std::nullopt;
 
   public:
