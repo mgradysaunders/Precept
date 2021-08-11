@@ -362,7 +362,7 @@ struct Array_initializers<Array<Float, 3>> {
     /// Form spherical direction from z-component and azimuth angle.
     static Vec3<Float> sphericalz(Float z, Float phi) noexcept {
         Float cos_theta = clamp_abs(z, +1);
-        Float sin_theta = pre::sqrt(1 - pre::min(z * z, 1));
+        Float sin_theta = pre::sqrt(1 - pre::min(z * z, Float(1)));
         auto [sin_phi, cos_phi] = pre::sincos(phi);
         return {sin_theta * cos_phi, sin_theta * sin_phi, cos_theta};
     }
@@ -413,6 +413,7 @@ struct Array_initializers<Array<Float, 3>> {
                 2 * numeric_constants<Float>::M_pi() * u[1]);
     }
 
+    // TODO move
     /// Henyey-Greenstein phase probability density function.
     static Float hg_phase_pdf(Float g, Float z) noexcept {
         if (pre::abs(g) < Float(0.00001)) {
@@ -427,6 +428,7 @@ struct Array_initializers<Array<Float, 3>> {
         }
     }
 
+    // TODO move
     /// Henyey-Greenstein phase probability density function sampling routine.
     static Vec3<Float> hg_phase_pdf_sample(Float g, Vec2<Float> u) noexcept {
         if (pre::abs(g) < Float(0.00001)) {

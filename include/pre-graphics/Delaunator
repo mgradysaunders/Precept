@@ -1,0 +1,225 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_DELAUNATOR
+#define PRE_GRAPHICS_DELAUNATOR
+
+#include <map>
+#include <set>
+#include <vector>
+#include <pre/Array>
+#include <pre/math>
+
+namespace pre {
+
+class Delaunator {
+  public:
+    using Pointd = Vec2<double>;
+
+    using Point = Vec2<float>;
+
+    using Int = std::int32_t;
+
+    static constexpr Int Nil = -1;
+
+    struct Edge {
+        Int v[2] = {Nil, Nil};
+
+        constexpr Edge() noexcept = default;
+
+        constexpr Edge(Int a, Int b) noexcept : v{a, b} {
+        }
+
+        constexpr auto operator<=>(const Edge& other) const noexcept {
+            return std::minmax(v[0], v[1]) <=>
+                   std::minmax(other.v[0], other.v[1]);
+        }
+
+        constexpr bool operator==(const Edge& other) const noexcept = default;
+
+        constexpr bool operator!=(const Edge& other) const noexcept = default;
+
+        constexpr auto& operator[](int i) noexcept {
+            return v[i];
+        }
+
+        constexpr auto& operator[](int i) const noexcept {
+            return v[i];
+        }
+    };
+
+    struct Triangle {
+        Int v[3] = {Nil, Nil, Nil};
+
+        constexpr Triangle() noexcept = default;
+
+        constexpr Triangle(Int a, Int b, Int c) noexcept : v{a, b, c} {
+        }
+
+        constexpr Int opposite(Edge e) const noexcept {
+            for (Int k : v)
+                if (k != e[0] and k != e[1])
+                    return k;
+            return Nil;
+        }
+
+        constexpr void cycle() noexcept {
+            Int v0 = v[0];
+            v[0] = v[1];
+            v[1] = v[2];
+            v[2] = v0;
+        }
+
+        constexpr void flip_winding() noexcept {
+            std::swap(v[1], v[2]);
+        }
+
+        constexpr auto& operator[](int i) noexcept {
+            return v[i];
+        }
+
+        constexpr auto& operator[](int i) const noexcept {
+            return v[i];
+        }
+    };
+
+    struct TrianglePair {
+        Int t[2] = {Nil, Nil};
+
+        constexpr TrianglePair() noexcept = default;
+
+        constexpr TrianglePair(Int f, Int g) noexcept : t{f, g} {
+        }
+
+        constexpr bool empty() const noexcept {
+            return t[0] == Nil and t[1] == Nil;
+        }
+
+        constexpr bool full() const noexcept {
+            return t[0] != Nil and t[1] != Nil;
+        }
+
+        constexpr void push(Int f) noexcept {
+            ASSERT(!full());
+            t[t[0] == Nil ? 0 : 1] = f;
+        }
+
+        constexpr void replace(Int f, Int g) noexcept {
+            ASSERT((t[0] == f) != (t[1] == f));
+            t[t[0] == f ? 0 : 1] = g;
+        }
+
+        constexpr auto& operator[](int i) noexcept {
+            return t[i];
+        }
+
+        constexpr auto& operator[](int i) const noexcept {
+            return t[i];
+        }
+    };
+
+    using EdgeIterator = typename std::map<Edge, TrianglePair>::const_iterator;
+
+  public:
+    Delaunator() = default;
+
+    Delaunator(const Delaunator&) = default;
+
+    Delaunator(Delaunator&&) = default;
+
+    Delaunator& operator=(const Delaunator&) = default;
+
+    Delaunator& operator=(Delaunator&&) = default;
+
+  public:
+    void build(const std::vector<Point>& new_points) {
+        points = new_points;
+        build();
+    }
+
+    void build();
+
+    void clear() noexcept {
+        points.clear();
+        triangles.clear();
+        edge_triangles.clear();
+        boundary_edges.clear();
+    }
+
+    float signed_area(Triangle tri) const noexcept {
+        Pointd point0 = points[tri[0]];
+        Pointd point1 = points[tri[1]];
+        Pointd point2 = points[tri[2]];
+        Pointd edge1 = point1 - point0;
+        Pointd edge2 = point2 - point0;
+        return edge1[0] * edge2[1] - edge1[1] * edge2[0];
+    }
+
+    float opposite_angle(Triangle tri, Edge edge) const noexcept {
+        Pointd point0 = points[edge[0]];
+        Pointd point1 = points[edge[1]];
+        Pointd point2 = points[tri.opposite(edge)];
+        return angle_between(point0 - point2, point1 - point2);
+    }
+
+    bool delaunay_condition(Edge edge) const noexcept {
+        auto itr = edge_triangles.find(edge);
+        if (itr == edge_triangles.end())
+            return true;
+        return delaunay_condition(itr);
+    }
+
+    bool delaunay_condition(EdgeIterator itr) const noexcept {
+        if (itr == edge_triangles.end() or not itr->second.full())
+            return true;
+        Int t0 = itr->second[0];
+        Int t1 = itr->second[1];
+        float phi0 = std::abs(opposite_angle(triangles[t0], itr->first));
+        float phi1 = std::abs(opposite_angle(triangles[t1], itr->first));
+        return std::abs(phi0) + std::abs(phi1) < 180.1_degreesf;
+    }
+
+  public:
+    /// Points.
+    std::vector<Point> points;
+
+    /// Triangles.
+    std::vector<Triangle> triangles;
+
+    /// Edge-to-triangle pair.
+    std::map<Edge, TrianglePair> edge_triangles;
+
+    /// Boundary edges.
+    std::set<Edge> boundary_edges;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_DELAUNATOR

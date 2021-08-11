@@ -293,7 +293,7 @@ inline Array<Float, 3> lab_to_rgb(const Array<Float, 3>& lab) noexcept {
     return xyz_to_rgb(lab_to_xyz(lab));
 }
 
-/// Color-correlated temperature (CCT) to chromaticity.
+/// Correlated color temperature (CCT) to chromaticity.
 ///
 /// \param[in] t
 /// Blackbody temperature in degrees Kelvin.
@@ -305,6 +305,27 @@ inline Array<Float, 2> cct_to_xy(Float t) noexcept {
                   : ((-2.0064e9 / t + 1.9018e6) / t + 0.24748e3) / t + 0.23704;
     Float y = -3 * x * x + 2.87 * x - 0.275;
     return {x, y};
+}
+
+/// Chromaticity to correlated color temperature (CCT).
+///
+/// \param[in] xy
+/// Chromaticity.
+///
+template <std::floating_point Float>
+inline Float xy_to_cct(Array<Float, 2> xy) noexcept {
+    Float n = (xy[0] - 0.3366) / (xy[1] - 0.1735);
+    Float t = -9.4986315e+02 + //
+              6.25380338e+03 * std::exp(-n / 0.92159) +
+              2.87059900e+01 * std::exp(-n / 0.20039) +
+              4.00000000e-05 * std::exp(-n / 0.07125);
+    if (!(t < 50000)) {
+        n = (xy[0] - 0.3356) / (xy[1] - 0.1691);
+        t = 3.628448953e+04 + //
+            2.280000000e-03 * std::exp(-n / 0.07861) +
+            5.453500000e-36 * std::exp(-n / 0.01543);
+    }
+    return std::max(t, Float(0));
 }
 
 namespace cie_data {

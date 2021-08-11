@@ -52,6 +52,7 @@ add_library(
     src/AdjacencyLists.cpp
     src/AnimationCurve.cpp
     src/Color.cpp
+    src/Delaunator.cpp
     src/DynamicBbTree.cpp
     src/DynamicKdTree.cpp
     src/Image.cpp
