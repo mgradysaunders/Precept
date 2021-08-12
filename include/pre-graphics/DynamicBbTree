@@ -182,7 +182,7 @@ class DynamicBbTree {
 
     template <std::invocable<Int> Visitor>
     void visit_ray_cast(const Ray<float, Dim>& ray, Visitor&& visitor) {
-        visit(RayTester<Box>(ray), std::forward<Visitor>(visitor));
+        visit(RayTest<Box>(ray), std::forward<Visitor>(visitor));
     }
 
   private:

@@ -132,7 +132,7 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
     }
 
     constexpr Bound expand_relative(Value eps) const noexcept
-            requires std::floating_point<Value> {
+        requires std::floating_point<Value> {
         Point cen = center();
         Point off = (1 + eps) / 2 * extent();
         return Bound(cen - off, cen + off);
@@ -152,7 +152,7 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
 
     constexpr Point clamp(const Point& point) const noexcept {
         return pre::clamp(point, min(), max());
-    } 
+    }
 
     /// Hyper volume.
     ///
@@ -211,13 +211,15 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
     /** \{ */
 
     constexpr Bound operator|(const Bound& other) const noexcept {
-        return {pre::min(min(), other.min()), //
-                pre::max(max(), other.max())};
+        return {
+            pre::min(min(), other.min()), //
+            pre::max(max(), other.max())};
     }
 
     constexpr Bound operator&(const Bound& other) const noexcept {
-        return {pre::max(min(), other.min()), //
-                pre::min(max(), other.max())};
+        return {
+            pre::max(min(), other.min()), //
+            pre::min(max(), other.max())};
     }
 
     constexpr Bound operator|(const Point& point) const noexcept {
@@ -229,12 +231,12 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
     }
 
     friend constexpr Bound operator|(
-            const Point& point, const Bound& box) noexcept {
+        const Point& point, const Bound& box) noexcept {
         return Bound(point) | box;
     }
 
     friend constexpr Bound operator&(
-            const Point& point, const Bound& box) noexcept {
+        const Point& point, const Bound& box) noexcept {
         return Bound(point) & box;
     }
 
@@ -257,8 +259,9 @@ struct Bound : ArrayLike<Bound<Value, Dim>, Array<Value, Dim>> {
     /// Implicit cast as other.
     template <typename Other, size_t OtherDim>
     constexpr operator Bound<Other, OtherDim>() const noexcept {
-        return {Array<Other, OtherDim>(min()), //
-                Array<Other, OtherDim>(max())};
+        return {
+            Array<Other, OtherDim>(min()), //
+            Array<Other, OtherDim>(max())};
     }
 
   public:
@@ -270,7 +273,7 @@ Bound(const Array<T, N>&) -> Bound<T, N>;
 
 template <typename T, typename U, size_t N>
 Bound(const Array<T, N>&, const Array<U, N>&)
-        -> Bound<std::common_type_t<T, U>, N>;
+    -> Bound<std::common_type_t<T, U>, N>;
 
 template <typename T = float>
 using Bound1 = Bound<T, 1>;
@@ -285,12 +288,12 @@ template <typename T = float>
 using Bound4 = Bound<T, 4>;
 
 template <std::floating_point Float, size_t Dim>
-struct RayTester<Bound<Float, Dim>> {
+struct RayTest<Bound<Float, Dim>> {
   public:
-    using RayT = Ray<Float, Dim>;
-    using HitT = Hit<Float, Dim>;
+    using RayType = Ray<Float, Dim>;
+    using HitType = Hit<Float, Dim>;
 
-    constexpr RayTester(const RayT& r) noexcept
+    constexpr RayTest(const RayType& r) noexcept
         : ray(&r), dir_inv(1 / r.dir), dir_sgn(pre::signbit(r.dir)) {
     }
 
@@ -315,7 +318,7 @@ struct RayTester<Bound<Float, Dim>> {
     }
 
     constexpr bool operator()(
-            const Bound<Float, Dim>& box, HitT* hit) const noexcept {
+        const Bound<Float, Dim>& box, HitType* hit) const noexcept {
         if (not hit)
             return operator()(box);
         const Array<Float, Dim>& org = ray->org;
@@ -371,7 +374,7 @@ struct RayTester<Bound<Float, Dim>> {
     }
 
   public:
-    const RayT* ray = nullptr;
+    const RayType* ray = nullptr;
     Array<Float, Dim> dir_inv = {};
     Array<short, Dim> dir_sgn = {};
 };

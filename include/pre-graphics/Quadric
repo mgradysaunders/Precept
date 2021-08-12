@@ -80,16 +80,16 @@ template <std::floating_point Float = float>
 using Quadric3 = Quadric<Float, 3>;
 
 template <std::floating_point Float, size_t Dim>
-struct RayTester<Quadric<Float, Dim>> {
+struct RayTest<Quadric<Float, Dim>> {
   public:
-    using RayT = Ray<Float, Dim>;
-    using HitT = Hit<Float, Dim>;
+    using RayType = Ray<Float, Dim>;
+    using HitType = Hit<Float, Dim>;
 
-    RayTester(const RayT& r) : ray(&r) {
+    constexpr RayTest(const RayType& r) noexcept : ray(&r) {
     }
 
-    bool operator()(const Quadric<Float, Dim>& quadric, HitT* hit = nullptr)
-            const noexcept {
+    bool operator()(const Quadric<Float, Dim>& quadric, HitType* hit = nullptr)
+        const noexcept {
         using BigFloat = std::common_type_t<Float, double>;
         Array<BigFloat, Dim, Dim> q = quadric.q;
         Array<BigFloat, Dim> r = quadric.r;
@@ -120,7 +120,7 @@ struct RayTester<Quadric<Float, Dim>> {
     }
 
   public:
-    const RayT* ray = nullptr;
+    const RayType* ray = nullptr;
 };
 
 } // namespace pre

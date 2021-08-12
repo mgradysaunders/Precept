@@ -68,9 +68,9 @@ class ImmutableBbTree {
         template <typename Range>
         constexpr auto values(const Range& range) const noexcept {
             ASSERT(count > 0);
-            return IteratorRange(                    //
-                    std::next(range.begin(), first), //
-                    std::next(range.begin(), first + count));
+            return IteratorRange(                //
+                std::next(range.begin(), first), //
+                std::next(range.begin(), first + count));
         }
 
         void serialize(auto& serializer) {
@@ -113,8 +113,8 @@ class ImmutableBbTree {
     }
 
     template <
-            std::invocable<const Box&> Test,
-            std::invocable<const Node&> Visitor>
+        std::invocable<const Box&> Test,
+        std::invocable<const Node&> Visitor>
     void visit(Test&& test, Visitor&& visitor) {
         GrowableStack<const Node*> todo;
         if (nodes.size())
@@ -134,19 +134,21 @@ class ImmutableBbTree {
 
     template <std::invocable<const Node&> Visitor>
     void visit_overlaps(const Box& box, Visitor&& visitor) {
-        visit([&](const Box& other) { return box.overlaps(other); },
-              std::forward<Visitor>(visitor));
+        visit(
+            [&](const Box& other) { return box.overlaps(other); },
+            std::forward<Visitor>(visitor));
     }
 
     template <std::invocable<const Node&> Visitor>
     void visit_contains(const Box& box, Visitor&& visitor) {
-        visit([&](const Box& other) { return box.contains(other); },
-              std::forward<Visitor>(visitor));
+        visit(
+            [&](const Box& other) { return box.contains(other); },
+            std::forward<Visitor>(visitor));
     }
 
     template <std::invocable<const Node&> Visitor>
     void visit_ray_cast(const Ray<float, Dim>& ray, Visitor&& visitor) {
-        visit(RayTester<Box>(ray), std::forward<Visitor>(visitor));
+        visit(RayTest<Box>(ray), std::forward<Visitor>(visitor));
     }
 
   public:

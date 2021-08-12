@@ -48,8 +48,15 @@ struct Triangle : ArrayLike<Triangle<Float, Dim>, Array<Float, Dim>> {
     constexpr Triangle() noexcept = default;
 
     constexpr Triangle(
-            const Point& p0, const Point& p1, const Point& p2) noexcept
+        const Point& p0, const Point& p1, const Point& p2) noexcept
         : points{p0, p1, p2} {
+    }
+
+    template <std::input_iterator Iterator>
+    explicit constexpr Triangle(Iterator first) noexcept {
+        points[0] = *first++;
+        points[1] = *first++;
+        points[2] = *first++;
     }
 
   public:
@@ -79,6 +86,9 @@ struct Triangle : ArrayLike<Triangle<Float, Dim>, Array<Float, Dim>> {
     /** \} */
 
   public:
+    /// \name Geometry API
+    /** \{ */
+
     constexpr Point center() const noexcept {
         return (points[0] + points[1] + points[2]) / 3;
     }
@@ -88,18 +98,29 @@ struct Triangle : ArrayLike<Triangle<Float, Dim>, Array<Float, Dim>> {
     }
 
     constexpr Vec normal() const noexcept requires(Dim == 3) {
-        return pre::cross(
-                points[1] - points[0], //
-                points[2] - points[0]);
+        return cross(
+            points[1] - points[0], //
+            points[2] - points[0]);
     }
 
     Float area() const noexcept {
         Vec e1 = points[1] - points[0];
         Vec e2 = points[2] - points[0];
         if constexpr (Dim == 2)
-            return Float(0.5) * std::abs(pre::cross(e1, e2));
+            return Float(0.5) * std::abs(cross(e1, e2));
         else
-            return Float(0.5) * pre::length(pre::cross(e1, e2));
+            return Float(0.5) * pre::length(cross(e1, e2));
+    }
+
+    Point circumcenter() const noexcept requires(Dim == 2) {
+        for (int k = 0; k < 3; k++) {
+            int k1 = (k + 1) % 3;
+            int k2 = (k + 2) % 3;
+            auto isect = edge(k, k1).perp().intersect(edge(k, k2).perp());
+            if (pre::isfinite(isect.point).all())
+                return isect.point;
+        }
+        return center();
     }
 
     struct Nearest {
@@ -134,20 +155,44 @@ struct Triangle : ArrayLike<Triangle<Float, Dim>, Array<Float, Dim>> {
     template <typename Gen>
     Sample sample_uniform(Gen& gen) const noexcept {
         return sample_uniform(
-                generate_canonical<Float>(gen),
-                generate_canonical<Float>(gen));
+            generate_canonical<Float>(gen), //
+            generate_canonical<Float>(gen));
+    }
+
+    Array<Float, 2> invert(Point p) const noexcept {
+        Float u = 0;
+        Float v = 0;
+        if constexpr (Dim == 2) {
+            Float s = cross(points[1] - points[0], points[2] - points[0]);
+            u = cross(points[0] - points[2], p - points[2]) / s;
+            v = cross(points[1] - points[0], p - points[0]) / s;
+        }
+        else {
+            Vec w = normal();
+            p = p - dot(p - points[0], w) / dot(w, w) * w;
+            w = w / dot(w, w);
+            u = cross(w, points[0] - points[2], p - points[2]);
+            v = cross(w, points[1] - points[0], p - points[0]);
+        }
+        return {u, v};
     }
 
     constexpr Point operator()(Float u, Float v) const noexcept {
-        return (1 - u - v) * points[0] + u * points[1] + v * points[2];
+        Float b0 = 1 - u - v;
+        Float b1 = u;
+        Float b2 = v;
+        return b0 * points[0] + b1 * points[1] + b2 * points[2];
     }
+
+    /** \} */
 
   public:
     template <std::floating_point Other, size_t OtherDim>
     constexpr operator Triangle<Other, OtherDim>() const noexcept {
-        return {Array<Other, OtherDim>(points[0]),
-                Array<Other, OtherDim>(points[1]),
-                Array<Other, OtherDim>(points[2])};
+        return {
+            Array<Other, OtherDim>(points[0]),
+            Array<Other, OtherDim>(points[1]),
+            Array<Other, OtherDim>(points[2])};
     }
 
   public:
@@ -156,47 +201,53 @@ struct Triangle : ArrayLike<Triangle<Float, Dim>, Array<Float, Dim>> {
 
 template <std::floating_point Float, size_t Dim>
 inline typename Triangle<Float, Dim>::Nearest Triangle<Float, Dim>::nearest(
-        Point p) const noexcept {
+    Point p) const noexcept {
     Nearest near;
+    Float b[3] = {};
     if constexpr (Dim == 2) {
-        for (int k = 0; k < 3; k++) {
-            auto near_edge = edge(k, (k + 1) % 3).nearest(p);
-            if (near.dist2 > near_edge.dist2) {
-                near.point = near_edge.point;
-                near.u = near_edge.t;
-                near.v = 0;
-                near.dist2 = near_edge.dist2;
-                near.signed_dist2 = near_edge.signed_dist2;
-            }
-        }
-    }
-    else {
-        Vec perp = normalize(normal());
-        Vec proj = p - dot(p - points[0], perp) * perp;
-        near.point = proj;
-        near.dist2 = distance2(p, proj);
-        Float b[3];
         for (int k = 0; k < 3; k++) {
             int k0 = k;
             int k1 = (k + 1) % 3;
             int k2 = (k + 2) % 3;
-            const Array<Float, 3>& p1 = points[k1];
-            const Array<Float, 3>& p2 = points[k2];
-            b[k0] = cross(perp, p2 - p1, proj - p1);
-            if (b[k0] < 0) {
-                auto near_edge = edge(k1, k2).nearest(p);
+            auto near_edge = edge(k1, k2).nearest(p);
+            if (near.dist2 > near_edge.dist2) {
+                near.point = near_edge.point;
+                near.dist2 = near_edge.dist2;
+                near.signed_dist2 = near_edge.signed_dist2;
                 b[k0] = 0;
                 b[k1] = 1 - near_edge.t;
                 b[k2] = near_edge.t;
+            }
+        }
+    }
+    else {
+        Vec w = normal();
+        Vec q = p - points[0];
+        q = p - dot(q, w) / dot(w, w) * w;
+        w = w / dot(w, w);
+        near.point = q;
+        near.dist2 = distance2(p, q);
+        for (int k = 0; k < 3; k++) {
+            int k0 = k;
+            int k1 = (k + 1) % 3;
+            int k2 = (k + 2) % 3;
+            const Point& p1 = points[k1];
+            const Point& p2 = points[k2];
+            b[k0] = cross(w, p2 - p1, q - p1);
+            if (b[k0] < 0) {
+                auto near_edge = edge(k1, k2).nearest(p);
                 near.point = near_edge.point;
                 near.dist2 = near_edge.dist2;
+                b[k0] = 0;
+                b[k1] = 1 - near_edge.t;
+                b[k2] = near_edge.t;
                 break;
             }
         }
-        near.u = b[1];
-        near.v = b[2];
-        near.signed_dist2 = std::copysign(near.dist2, dot(perp, p - proj));
+        near.signed_dist2 = std::copysign(near.dist2, dot(w, p - q));
     }
+    near.u = b[1];
+    near.v = b[2];
     return near;
 }
 
@@ -207,39 +258,34 @@ template <std::floating_point Float = float>
 using Triangle3 = Triangle<Float, 3>;
 
 template <std::floating_point Float>
-struct RayTester<Triangle<Float, 2>> {
+struct RayTest<Triangle<Float, 2>> {
   public:
-    using RayT = Ray<Float, 2>;
-    using HitT = Hit<Float, 2>;
+    using RayType = Ray<Float, 2>;
+    using HitType = Hit<Float, 2>;
 
-    constexpr RayTester(const RayT& r) noexcept : ray(&r) {
+    constexpr RayTest(const RayType& r) noexcept : ray(&r) {
     }
 
-    constexpr bool operator()(
-            const Triangle<Float, 2>& triangle,
-            HitT* hit = nullptr) const noexcept {
+    bool operator()(
+        const Triangle<Float, 2>& tri, HitType* hit = nullptr) const noexcept {
         // Test each line segment.
-        bool any_hit = false;
-        for (int k = 0; k < 3; k++)
-            if (ray->test(triangle.edge(k, (k + 1) % 3), hit)) {
-                any_hit = true;
-                if (not hit)
-                    break;
-            }
-        return any_hit;
+        bool hit0 = ray->test(tri.edge(0, 1), hit);
+        bool hit1 = ray->test(tri.edge(1, 2), hit);
+        bool hit2 = ray->test(tri.edge(2, 0), hit);
+        return hit0 or hit1 or hit2;
     }
 
   public:
-    const RayT* ray = nullptr;
+    const RayType* ray = nullptr;
 };
 
 template <std::floating_point Float>
-struct RayTester<Triangle<Float, 3>> {
+struct RayTest<Triangle<Float, 3>> {
   public:
-    using RayT = Ray<Float, 3>;
-    using HitT = Hit<Float, 3>;
+    using RayType = Ray<Float, 3>;
+    using HitType = Hit<Float, 3>;
 
-    constexpr RayTester(const RayT& r) noexcept : ray(&r) {
+    constexpr RayTest(const RayType& r) noexcept : ray(&r) {
         order[2] = pre::abs(ray->dir).argmax();
         order[0] = (order[2] + 1) % 3;
         order[1] = (order[2] + 2) % 3;
@@ -248,13 +294,12 @@ struct RayTester<Triangle<Float, 3>> {
         shear[1] = -shear[2] * ray->dir[order[1]];
     }
 
-    constexpr bool operator()(
-            const Triangle<Float, 3>& triangle,
-            HitT* hit = nullptr) const noexcept {
+    bool operator()(
+        const Triangle<Float, 3>& tri, HitType* hit = nullptr) const noexcept {
         Array<float, 3> v[3];
-        v[0] = (triangle[0] - ray->org).swizzle(order);
-        v[1] = (triangle[1] - ray->org).swizzle(order);
-        v[2] = (triangle[2] - ray->org).swizzle(order);
+        v[0] = (tri[0] - ray->org).swizzle(order);
+        v[1] = (tri[1] - ray->org).swizzle(order);
+        v[2] = (tri[2] - ray->org).swizzle(order);
 
         // Shear in XY.
         Array<float, 2> h[3];
@@ -265,9 +310,9 @@ struct RayTester<Triangle<Float, 3>> {
 
         // Barycentric coordinates.
         float b[3] = {
-                h[1][1] * h[2][0] - h[1][0] * h[2][1],
-                h[2][1] * h[0][0] - h[2][0] * h[0][1],
-                h[0][1] * h[1][0] - h[0][0] * h[1][1]};
+            h[1][1] * h[2][0] - h[1][0] * h[2][1],
+            h[2][1] * h[0][0] - h[2][0] * h[0][1],
+            h[0][1] * h[1][0] - h[0][0] * h[1][1]};
         if (b[0] == 0.0f or b[1] == 0.0f or b[2] == 0.0f) {
             b[0] = double(h[1][1]) * h[2][0] - double(h[1][0]) * h[2][1];
             b[1] = double(h[2][1]) * h[0][0] - double(h[2][0]) * h[0][1];
@@ -288,7 +333,7 @@ struct RayTester<Triangle<Float, 3>> {
         // ray parameter range and 2) if info is non-null. That being the case,
         // we defer the division.
         float t =
-                shear[2] * (b[0] * v[0][2] + b[1] * v[1][2] + b[2] * v[2][2]);
+            shear[2] * (b[0] * v[0][2] + b[1] * v[1][2] + b[2] * v[2][2]);
         float tmin = float(ray->tmin) * q;
         float tmax = float(ray->tmax) * q;
         if (((q > 0.0f) and not(t > tmin and t < tmax)) ||
@@ -301,10 +346,10 @@ struct RayTester<Triangle<Float, 3>> {
             b[1] /= q;
             b[2] /= q;
             ray->tmax = t;
-            hit->point = b[0] * triangle[0] + //
-                         b[1] * triangle[1] + //
-                         b[2] * triangle[2];
-            hit->normal = triangle.normal();
+            hit->point = b[0] * tri[0] + //
+                         b[1] * tri[1] + //
+                         b[2] * tri[2];
+            hit->normal = tri.normal();
             hit->u = b[1];
             hit->v = b[2];
         }
@@ -312,7 +357,7 @@ struct RayTester<Triangle<Float, 3>> {
     }
 
   public:
-    const RayT* ray = nullptr;
+    const RayType* ray = nullptr;
     Array<float, 3> shear;
     Array<short, 3> order;
 };

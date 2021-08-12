@@ -49,16 +49,14 @@ concept not_matches = !is_instantiation<T, X>::value;
 template <typename T>
 concept istream = requires {
     requires subclass<
-            T, std::basic_istream<
-                       typename T::char_type, typename T::traits_type>>;
+        T, std::basic_istream<typename T::char_type, typename T::traits_type>>;
 };
 
 /// Matches `std::basic_ostream`?
 template <typename T>
 concept ostream = requires {
     requires subclass<
-            T, std::basic_ostream<
-                       typename T::char_type, typename T::traits_type>>;
+        T, std::basic_ostream<typename T::char_type, typename T::traits_type>>;
 };
 
 // Is arithmetic?
@@ -76,7 +74,7 @@ concept arithmetic_or_complex = arithmetic<T> || matches<T, std::complex>;
 /// Is floating point or standard complex?
 template <typename T>
 concept floating_point_or_complex =
-        std::floating_point<T> || matches<T, std::complex>;
+    std::floating_point<T> || matches<T, std::complex>;
 
 /// Is scalar? (arithmetic, pointer, enum, or nullptr_t)
 template <typename T>
@@ -123,7 +121,7 @@ concept allocator_aware = requires(T& c) {
 template <typename T>
 concept sequence_constructible = requires {
     requires std::constructible_from<
-            T, const typename T::value_type*, const typename T::value_type*>;
+        T, const typename T::value_type*, const typename T::value_type*>;
 };
 
 /// Is trivially_destructible?
