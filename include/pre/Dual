@@ -321,6 +321,6 @@ struct to_floating_point<Dual<T>> {
 
 } // namespace pre
 
-#include "_hidden/Dual_cmath.inl"
+#include "./hidden/Dual_cmath.inl"
 
 #endif // #ifndef PRE_DUAL

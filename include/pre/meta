@@ -81,21 +81,21 @@
 #define ASSERT(what) ((what) ? void(0) : [] { assert(!#what); }())
 #endif // #if NDEBUG
 
-#include "_hidden/_meta/concepts.inl"
+#include "./hidden/meta/concepts.inl"
 
-#include "_hidden/_meta/Explicit.inl"
+#include "./hidden/meta/Explicit.inl"
 
-#include "_hidden/_meta/Scoped.inl"
+#include "./hidden/meta/Scoped.inl"
 
-#include "_hidden/_meta/IteratorRange.inl"
+#include "./hidden/meta/IteratorRange.inl"
 
-#include "_hidden/_meta/ArrayLike.inl"
+#include "./hidden/meta/ArrayLike.inl"
 
-#include "_hidden/_meta/size.inl"
+#include "./hidden/meta/size.inl"
 
-#include "_hidden/_meta/type_list.inl"
+#include "./hidden/meta/type_list.inl"
 
-#include "_hidden/_meta/Variant.inl"
+#include "./hidden/meta/Variant.inl"
 
 namespace pre {
 

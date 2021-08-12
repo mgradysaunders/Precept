@@ -98,18 +98,18 @@ struct Triangle : ArrayLike<Triangle<Float, Dim>, Array<Float, Dim>> {
     }
 
     constexpr Vec normal() const noexcept requires(Dim == 3) {
-        return cross(
-            points[1] - points[0], //
-            points[2] - points[0]);
+        return cross(points[1] - points[0], points[2] - points[0]);
+    }
+
+    constexpr Float signed_area() const noexcept requires(Dim == 2) {
+        return cross(points[1] - points[0], points[2] - points[0]) / 2;
     }
 
     Float area() const noexcept {
-        Vec e1 = points[1] - points[0];
-        Vec e2 = points[2] - points[0];
         if constexpr (Dim == 2)
-            return Float(0.5) * std::abs(cross(e1, e2));
+            return std::abs(signed_area());
         else
-            return Float(0.5) * pre::length(cross(e1, e2));
+            return length(normal()) / 2;
     }
 
     Point circumcenter() const noexcept requires(Dim == 2) {

@@ -34,8 +34,7 @@
 #include <map>
 #include <set>
 #include <vector>
-#include <pre/Array>
-#include <pre/math>
+#include <pre-graphics/Line>
 #include <pre-graphics/Triangle>
 
 namespace pre {
@@ -174,13 +173,19 @@ class Delaunator {
         boundary_edges.clear();
     }
 
+    auto extract(Edge edge) const noexcept {
+        return pre::Line(points[edge[0]], points[edge[1]]);
+    }
+
+    auto extract(Triangle triangle) const noexcept {
+        return pre::Triangle(
+            points[triangle[0]], //
+            points[triangle[1]], //
+            points[triangle[2]]);
+    }
+
     float signed_area(Triangle triangle) const noexcept {
-        Pointd point0 = points[triangle[0]];
-        Pointd point1 = points[triangle[1]];
-        Pointd point2 = points[triangle[2]];
-        Pointd edge1 = point1 - point0;
-        Pointd edge2 = point2 - point0;
-        return (edge1[0] * edge2[1] - edge1[1] * edge2[0]) / 2;
+        return extract(triangle).signed_area();
     }
 
     float opposite_angle(Triangle triangle, Edge edge) const noexcept {
@@ -205,23 +210,6 @@ class Delaunator {
         float phi0 = std::abs(opposite_angle(triangles[t0], edge_itr->first));
         float phi1 = std::abs(opposite_angle(triangles[t1], edge_itr->first));
         return std::abs(phi0) + std::abs(phi1) < 180.1_degreesf;
-    }
-
-    Point center(Edge edge) const noexcept {
-        return (points[edge[0]] + points[edge[1]]) / 2.0f;
-    }
-
-    Point center(Triangle triangle) const noexcept {
-        return (points[triangle[0]] + points[triangle[1]] +
-                points[triangle[2]]) /
-               3.0f;
-    }
-
-    Point circumcenter(Triangle triangle) const noexcept {
-        return Triangle2<float>(
-                   points[triangle[0]], points[triangle[1]],
-                   points[triangle[2]])
-            .circumcenter();
     }
 
   public:

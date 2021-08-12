@@ -46,20 +46,20 @@
 
 #include <pre/meta>
 
-#include "_hidden/_memory/HeapArena.inl"
+#include "./hidden/memory/HeapArena.inl"
 
-#include "_hidden/_memory/HeapArenaAllocator.inl"
+#include "./hidden/memory/HeapArenaAllocator.inl"
 
-#include "_hidden/_memory/HeapStack.inl"
+#include "./hidden/memory/HeapStack.inl"
 
-#include "_hidden/_memory/RefCountable.inl"
+#include "./hidden/memory/RefCountable.inl"
 
-#include "_hidden/_memory/RefPtr.inl"
+#include "./hidden/memory/RefPtr.inl"
 
-#include "_hidden/_memory/StaticQueue.inl"
+#include "./hidden/memory/StaticQueue.inl"
 
-#include "_hidden/_memory/StaticStack.inl"
+#include "./hidden/memory/StaticStack.inl"
 
-#include "_hidden/_memory/StaticString.inl"
+#include "./hidden/memory/StaticString.inl"
 
 #endif // #ifndef PRE_MEMORY

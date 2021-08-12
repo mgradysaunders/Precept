@@ -132,6 +132,7 @@ class ImmutableBbTree {
         }
     }
 
+    /// Visit each leaf the given box overlaps.
     template <std::invocable<const Node&> Visitor>
     void visit_overlaps(const Box& box, Visitor&& visitor) {
         visit(
@@ -139,6 +140,7 @@ class ImmutableBbTree {
             std::forward<Visitor>(visitor));
     }
 
+    /// Visit each leaf the given box contains.
     template <std::invocable<const Node&> Visitor>
     void visit_contains(const Box& box, Visitor&& visitor) {
         visit(

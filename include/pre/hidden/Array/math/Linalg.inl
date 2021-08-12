@@ -3,10 +3,8 @@
 
 namespace pre {
 
-template <
-        concepts::floating_point_or_complex Field,
-        typename Alloc = std::allocator<Field>>
-struct Linalg {
+template <typename Field, typename Alloc = std::allocator<Field>>
+requires concepts::floating_point_or_complex<Field> struct Linalg {
   public:
     using Float = to_floating_point_t<Field>;
 
@@ -185,8 +183,9 @@ struct Linalg {
                     s = -s;
                 }
             }
-            expect(pre::abs(a(j, j)) > numeric_limits<Float>::min_invertible(),
-                   "non-singular matrix");
+            expect(
+                pre::abs(a(j, j)) > numeric_limits<Float>::min_invertible(),
+                "non-singular matrix");
             // Factorize.
             Field fac = Float(1) / a(j, j);
             for (int i = j + 1; i < n; i++) {
@@ -206,14 +205,15 @@ struct Linalg {
     /// \param[in]  p  _Optional_. Permutation vector.
     ///
     static void lu_solve(
-            MatView<const Field> a,
-            MatView<const Field> b,
-            MatView<Field> x,
-            VecView<const int> p = {}) {
+        MatView<const Field> a,
+        MatView<const Field> b,
+        MatView<Field> x,
+        VecView<const int> p = {}) {
         ASSERT(a.is_square());
-        ASSERT(b.rows() == a.rows() && //
-               x.rows() == a.cols() && //
-               x.cols() == b.cols());
+        ASSERT(
+            b.rows() == a.rows() && //
+            x.rows() == a.cols() && //
+            x.cols() == b.cols());
         ASSERT(!p || a.size() == p.size());
         int m = b.rows();
         int n = b.cols();
@@ -270,8 +270,9 @@ struct Linalg {
             }
             Field& akk = a(k, k);
             akk = pre::sqrt(akk);
-            expect(pre::isfinite(akk) && pre::abs(akk) > eps,
-                   "hermitian and positive semi-definite matrix");
+            expect(
+                pre::isfinite(akk) && pre::abs(akk) > eps,
+                "hermitian and positive semi-definite matrix");
             a(k, Slice(k + 1, n)) /= akk;
             for (int j = k + 1; j < n; j++)
                 for (int i = k + 1; i < j + 1; i++) {
@@ -290,14 +291,15 @@ struct Linalg {
     /// \param[in]  p  _Optional_. Pivot vector.
     ///
     void chol_solve(
-            MatView<const Field> a,
-            MatView<const Field> b,
-            MatView<Field> x,
-            VecView<const int> p = {}) {
+        MatView<const Field> a,
+        MatView<const Field> b,
+        MatView<Field> x,
+        VecView<const int> p = {}) {
         ASSERT(a.is_square());
-        ASSERT(b.rows() == a.rows() && //
-               x.rows() == a.cols() && //
-               x.cols() == b.cols());
+        ASSERT(
+            b.rows() == a.rows() && //
+            x.rows() == a.cols() && //
+            x.cols() == b.cols());
         ASSERT(!p || a.size() == p.size());
         int m = b.rows();
         int n = b.cols();
@@ -348,7 +350,7 @@ struct Linalg {
   private:
     /// Apply Householder reflection from left.
     static constexpr void householderl_reflection(
-            VecView<const Field> w, MatView<Field> a) noexcept {
+        VecView<const Field> w, MatView<Field> a) noexcept {
         if (!a.empty()) {
             ASSERT(w.size() == a.rows());
             int m = a.rows();
@@ -426,7 +428,7 @@ struct Linalg {
         while (1) {
             // Find target indices.
             Float thresh =
-                    pre::max(pre::abs(*x.diag(0))) * (Eps<Float> * Float(8));
+                pre::max(pre::abs(*x.diag(0))) * (Eps<Float> * Float(8));
             int s = 0;
             while (s < n - 1 && pre::abs(x.diag(1)[s]) < thresh)
                 s++;
@@ -488,11 +490,11 @@ struct Linalg {
   private:
     /// Apply Givens rotation to pair of rows, given cosine and sine.
     static constexpr void givensl_rotation(
-            int s,
-            int t,
-            Float cos_beta,
-            Field sin_beta,
-            MatView<Field> x) noexcept {
+        int s,
+        int t,
+        Float cos_beta,
+        Field sin_beta,
+        MatView<Field> x) noexcept {
         for (int j = 0; j < int(x.cols()); j++) {
             Field x0 = x(s, j);
             Field x1 = x(t, j);
@@ -503,12 +505,12 @@ struct Linalg {
 
     /// Apply Givens rotation to pair of rows.
     static void givensl(
-            int s,
-            int t,
-            Field f,
-            Field g,
-            MatView<Field> x,
-            MatView<Field> y = {}) noexcept {
+        int s,
+        int t,
+        Field f,
+        Field g,
+        MatView<Field> x,
+        MatView<Field> y = {}) noexcept {
         ASSERT(y.empty() || (y.is_square()));
         if (s >= 0 && s < int(x.rows()) && //
             t >= 0 && t < int(x.rows())) {
@@ -536,12 +538,12 @@ struct Linalg {
 
     /// Apply Givens rotation to pair of columns.
     static void givensr(
-            int s,
-            int t,
-            Field f,
-            Field g,
-            MatView<Field> x,
-            MatView<Field> y = {}) noexcept {
+        int s,
+        int t,
+        Field f,
+        Field g,
+        MatView<Field> x,
+        MatView<Field> y = {}) noexcept {
         return givensl(s, t, f, g, x.transpose(), y.transpose());
     }
 

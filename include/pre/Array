@@ -74,15 +74,15 @@ concept not_array = !is_array<T>::value;
 
 } // namespace pre
 
-#include "_hidden/_Array/aliases.inl"
+#include "./hidden/Array/aliases.inl"
 
-#include "_hidden/_Array/Index.inl"
+#include "./hidden/Array/Index.inl"
 
-#include "_hidden/_Array/Lazy.inl"
+#include "./hidden/Array/Lazy.inl"
 
-#include "_hidden/_Array/View.inl"
+#include "./hidden/Array/View.inl"
 
-#include "_hidden/_Array/Nd.inl"
+#include "./hidden/Array/Nd.inl"
 
 namespace pre {
 
@@ -730,13 +730,13 @@ constexpr Array<T, N, M> transpose(const Array<T, M, N>& arr) noexcept {
 
 } // namespace pre
 
-#include "_hidden/_Array/operators.inl"
+#include "./hidden/Array/operators.inl"
 
 #ifdef PRE_MATH
 
 #include <pre/memory>
 
-#include "_hidden/_Array/math.inl"
+#include "./hidden/Array/math.inl"
 
 #endif // #ifdef PRE_MATH
 

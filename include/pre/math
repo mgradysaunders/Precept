@@ -52,13 +52,13 @@
 #include <pre/meta>
 
 // for pre::numeric_limits
-#include "_hidden/_math/numeric_limits.inl"
+#include "./hidden/math/numeric_limits.inl"
 
 // for pre::numeric_constants
-#include "_hidden/_math/numeric_constants.inl"
+#include "./hidden/math/numeric_constants.inl"
 
 // for <cmath> wrappers
-#include "_hidden/_math/cmath.inl"
+#include "./hidden/math/cmath.inl"
 
 namespace pre {
 
@@ -226,15 +226,15 @@ template <typename T>
 
 } // namespace pre
 
-#include "_hidden/_math/cmath_extras.inl"
+#include "./hidden/math/cmath_extras.inl"
 
-#include "_hidden/_math/interpolation.inl"
+#include "./hidden/math/interpolation.inl"
 
 #ifdef PRE_ARRAY
 
 #include <pre/memory>
 
-#include "_hidden/_Array/math.inl"
+#include "./hidden/Array/math.inl"
 
 #endif // #ifdef PRE_ARRAY
 

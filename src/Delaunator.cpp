@@ -77,10 +77,10 @@ void Delaunator::build() {
             Int b = edge[1];
             if (signed_area(Triangle(v, a, b)) < 0) {
                 // Form counter-clockwise triangle.
-                auto t = triangles.size();
-                edge_triangles[edge].push(t);
-                edge_triangles[Edge(v, a)].push(t);
-                edge_triangles[Edge(b, v)].push(t);
+                Int f = triangles.size();
+                edge_triangles[edge].push(f);
+                edge_triangles[Edge(v, a)].push(f);
+                edge_triangles[Edge(b, v)].push(f);
                 triangles.emplace_back(v, b, a);
 
                 // Record boundary updates.
