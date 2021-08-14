@@ -1,0 +1,207 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_BSPLINE_BASIS
+#define PRE_GRAPHICS_BSPLINE_BASIS
+
+#include <pre/Array>
+#include <pre/math>
+
+namespace pre {
+
+template <size_t NumPoints, size_t Degree>
+struct BSplineBasisStorage {
+    Array<float, NumPoints + Degree + 1> knots;
+    Array<float, NumPoints + Degree + 1, Degree + 1> basis;
+};
+
+struct BSplineBasis {
+  public:
+    constexpr BSplineBasis() noexcept = default;
+
+    template <size_t NumPoints, size_t Degree>
+    constexpr BSplineBasis(
+        BSplineBasisStorage<NumPoints, Degree>& storage) noexcept
+        : knots(storage.knots.view()), //
+          basis(storage.basis.view()) {
+    }
+
+  public:
+    constexpr int degree() const noexcept {
+        return basis.cols() - 1;
+    }
+
+    constexpr int num_knots() const noexcept {
+        return basis.rows();
+    }
+
+    constexpr int num_points() const noexcept {
+        return basis.rows() - basis.cols();
+    }
+
+    constexpr float domain_min() const noexcept {
+        return knots[degree()];
+    }
+
+    constexpr float domain_max() const noexcept {
+        return knots[num_points()];
+    }
+
+    /// Set knots open.
+    ///
+    /// Assuming 0-based indexing,
+    /// - set knots \f$ t_i = 0 \f$ for \f$ i \in [0, d) \f$,
+    /// - set knots \f$ t_i = 1 \f$ for \f$ i \in [n, m) \f$,
+    /// - set knots \f$ t_i = (i - d) / (n - d) \f$ for \f$ i \in [d, n) \f$.
+    ///
+    /// This forces the spline to touch the first and
+    /// last control points at \f$ t = 0 \f$ and \f$ t = 1 \f$
+    /// respectively. However, the spline is not differentiable at these
+    /// points.
+    ///
+    constexpr void set_knots_open() noexcept {
+        int d = degree();
+        int m = num_knots();
+        int n = num_points();
+        knots[Slice(0, d)] = 0.0f;
+        knots[Slice(n, m)] = 1.0f;
+        for (int i = d; i < n; i++)
+            knots[i] = (i - d) / float(n - d);
+    }
+
+    /// Set knots closed.
+    ///
+    /// Assuming 0-based indexing, set knots
+    /// \f$ t_i = (i - d) / (n - d) \f$ for \f$ i \in [0, m) \f$. Then,
+    /// the first \f$ d \f$ knots and the last \f$ d \f$ knots are outside
+    /// the standard \f$ [0, 1] \f$ domain. That is,
+    /// - knots \f$ t_i < 0 \f$ for \f$ i \in [0, d) \f$,
+    /// - knots \f$ t_i > 1 \f$ for \f$ i \in (n, m) \f$.
+    ///
+    /// This forces the spline to be properly differentiable.
+    /// However, the spline never touches the first and last control
+    /// points. This is still useful for closed curves, because control
+    /// points may be repeated to ensure continuity at \f$ t = 0 \f$
+    /// and \f$ t = 1 \f$.
+    ///
+    /// \note
+    /// To form a closed curve, it is necessary to (cyclically) repeat
+    /// control points \f$ d \f$ times.
+    ///
+    constexpr void set_knots_closed() noexcept {
+        int d = degree();
+        int m = num_knots();
+        int n = num_points();
+        for (int i = 0; i < m; i++)
+            knots[i] = (i - d) / float(n - d);
+    }
+
+    constexpr void normalize_domain() noexcept {
+        float t0 = domain_min();
+        float t1 = domain_max();
+        for (float& t : knots)
+            t = (t - t0) / (t1 - t0);
+    }
+
+    /// Knots weight function helper.
+    constexpr float knots_weight(float t, int i, int j) const noexcept {
+        return (t - knots[i]) / (knots[j] - knots[i]);
+    }
+
+    /// Update basis functions.
+    constexpr int update(float t) const noexcept {
+        t = pre::max(t, domain_min());
+        t = pre::min(t, domain_max());
+        int i = degree();
+        while (i + 1 < num_points() and not(t < knots[i + 1]))
+            i++;
+        basis(i, 0) = 1;
+        for (int j = 1; j <= degree(); j++)
+            basis(i, j) = basis(i, j - 1) * //
+                          knots_weight(t, i, i + j);
+        for (int j = 1; j <= degree(); j++)
+            basis(i - j, j) = basis(i - (j - 1), j - 1) * //
+                              knots_weight(t, i + 1, i - (j - 1));
+        for (int j = 2; j <= degree(); j++)
+            for (int p = i - j + 1, q = p + 1; p < i; p++, q++)
+                basis(p, j) = basis(p, j - 1) * knots_weight(t, p, p + j) +
+                              basis(q, j - 1) * knots_weight(t, q + j, q);
+        return i;
+    }
+
+    /// Evaluate curve.
+    template <typename Point>
+    constexpr Point curve(float t, const Point* ps) const noexcept {
+        Point p = {};
+        int i = update(t);
+        int j = i - degree();
+        while (j <= i) {
+            p += basis(j, degree()) * ps[j];
+            j += 1;
+        }
+        return p;
+    }
+
+    /// Evaluate NURBS curve.
+    template <typename Point>
+    constexpr Point curve(
+        float t, const Point* ps, const float* ws) const noexcept {
+        Point p = {};
+        float w = 0;
+        int i = update(t);
+        int j = i - degree();
+        while (j <= i) {
+            p += (basis(j, degree()) * ws[j]) * ps[j];
+            w += (basis(j, degree()) * ws[j]);
+            j += 1;
+        }
+        return p / w;
+    }
+
+  public:
+    /// Knots.
+    ///
+    /// Non-decreasing knot sequence \f$ \{ t_i \} \f$
+    /// where \f$ i \in [0, m) \f$.
+    ///
+    mutable VecView<float> knots;
+
+    /// Basis functions.
+    ///
+    /// Basis functions \f$ B_{i,j} \f$ where
+    /// \f$ i \in [0, m) \f$ is the knot and
+    /// \f$ j \in [0, d + 1) \f$ is the degree.
+    ///
+    mutable MatView<float> basis;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_BSPLINE_BASIS
