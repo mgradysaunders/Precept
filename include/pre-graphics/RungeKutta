@@ -1,0 +1,112 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_RUNGE_KUTTA
+#define PRE_GRAPHICS_RUNGE_KUTTA
+
+#include <pre/Array>
+#include <pre/math>
+#include <pre/random>
+
+namespace pre {
+
+/// An adaptive Runge-Kutta streamline tracer.
+template <size_t Dim>
+struct RungeKutta {
+    using Point = Array<double, Dim>;
+
+    double max_dist = Inf<double>;
+    double min_step = 1e-6;
+    double max_step = 1;
+    double tol = 1e-6;
+
+    template <std::invocable<Point> Func, std::invocable<Point> Callback>
+    void operator()(Point p, Func&& func, Callback&& callback) const {
+        if (not std::invoke(std::forward<Callback>(callback), p))
+            return;
+        Pcg32 rand;
+        int redo = 0;
+        double dist = 0;
+        double step = min_step;
+        auto next = [&](Point k = {}) {
+            return step * std::invoke(std::forward<Func>(func), p + k);
+        };
+        while (dist < max_dist) {
+            auto k1 = next();
+            auto k2 = next(0.25 * k1);
+            auto k3 = next(0.09375 * k1 + 0.28125 * k2);
+            auto k4 = next(
+                +0.879380974055530 * k1 + -3.277196176604461 * k2 +
+                +3.320892125625853 * k3);
+            auto k5 = next(
+                +2.032407407407407 * k1 + -8.000000000000000 * k2 +
+                +7.173489278752436 * k3 + -0.205896686159844 * k4);
+            auto k6 = next(
+                -0.296296296296296 * k1 + +2.000000000000000 * k2 +
+                +1.381676413255361 * k3 + +0.452972709551657 * k4 +
+                -0.275000000000000 * k5);
+            auto s = tol / //
+                     length(
+                         +0.005555555555556 * k1 + -0.075477582846004 * k3 +
+                         -0.059183008099190 * k4 + -0.040000000000000 * k5 +
+                         +0.072727272727273 * k6);
+            if (s > 0) {
+                step *= std::pow(s, 0.25);
+                step = std::fmax(step, min_step);
+                step = std::fmin(step, max_step);
+                if (s < 0.75) {
+                    if (redo++ > 4096)
+                        return;
+                    continue;
+                }
+            }
+            else {
+                step = std::exp(lerp(
+                    generate_canonical<float>(rand), //
+                    std::log(min_step),              //
+                    std::log(max_step)));
+                if (redo++ > 4096)
+                    return;
+                continue;
+            }
+            redo = 0;
+            auto v = +0.115740740740741 * k1 + +0.548927875243665 * k3 +
+                     +0.535722994391612 * k4 + -0.200000000000000 * k5;
+            p += v;
+            dist += length(v);
+            if (not std::invoke(std::forward<Callback>(callback), p))
+                return;
+        }
+    }
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_RUNGE_KUTTA
