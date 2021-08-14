@@ -59,6 +59,7 @@ add_library(
     src/ImmutableBbTree.cpp
     src/ImmutableKdTree.cpp
     src/Microsurface.cpp
+    src/Quadrature.cpp
     src/SunSky.cpp
     src/WavefrontObj.cpp
     )
