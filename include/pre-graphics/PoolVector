@@ -85,7 +85,7 @@ struct PoolVector : ArrayLike<PoolVector<Node>, Node> {
             pool.resize(next == 0 ? 32 : 2 * next);
             for (Int node = next; node < Int(pool.size()); node++)
                 pool[node].next = node + 1;
-            pool.back().next = -1;
+            pool.back().next = Nil;
             free = next;
         }
         Int node = free;
