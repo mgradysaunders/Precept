@@ -29,6 +29,29 @@ constexpr size_t operator""_GiB(long double x) noexcept {
     return x * 1073741824.0L;
 }
 
+enum class Bytes : size_t {};
+
+template <concepts::ostream Stream>
+inline Stream& operator<<(Stream& stream, Bytes bytes) {
+    auto prev_flags = stream.flags();
+    auto prev_precision = stream.precision(2);
+    stream.setf(std::ios_base::dec, std::ios_base::basefield);
+    stream.setf(std::ios_base::fixed, std::ios_base::floatfield);
+    stream.unsetf(std::ios_base::showpos);
+    size_t sz = size_t(bytes);
+    if (sz < 1_KiB)
+        stream << sz << 'B';
+    else if (sz < 1_MiB)
+        stream << double(sz) / double(1_KiB) << "KiB";
+    else if (sz < 1_GiB)
+        stream << double(sz) / double(1_MiB) << "MiB";
+    else
+        stream << double(sz) / double(1_GiB) << "GiB";
+    stream.flags(prev_flags);
+    stream.precision(prev_precision);
+    return stream;
+}
+
 template <size_t N>
 struct sized_int {
     static constexpr auto select_type() noexcept {

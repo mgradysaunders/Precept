@@ -396,7 +396,7 @@ inline Float illuminant_f(int n, Float lambda) noexcept {
 ///         \frac{1}{\lambda^5}
 ///         \frac{2hc^2}{e^{\frac{hc}{kT\lambda}}-1}
 /// \f]
-/// where, by typical conventions, \f$ Float \f$ is temperature
+/// where, by typical conventions, \f$ T \f$ is temperature
 /// in degrees kelvin and \f$ \lambda \f$ is wavelength in meters. The
 /// implementation here takes \f$ \lambda \f$ in _micrometers_ instead of
 /// meters, but in the interest of avoiding astronomic values, the output

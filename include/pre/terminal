@@ -245,11 +245,11 @@ inline consteval const char* argv_type() noexcept {
 template <typename Arg>
 inline Arg argv_cast(char* argv) {
     static_assert(
-            concepts::arithmetic<Arg> or      //
-            std::same_as<Arg, char*> or       //
-            std::same_as<Arg, const char*> or //
-            std::same_as<Arg, std::string> or //
-            std::same_as<Arg, std::string_view>);
+        concepts::arithmetic<Arg> or      //
+        std::same_as<Arg, char*> or       //
+        std::same_as<Arg, const char*> or //
+        std::same_as<Arg, std::string> or //
+        std::same_as<Arg, std::string_view>);
     // Is arithmetic?
     if constexpr (concepts::arithmetic<Arg>) {
         // Try to convert from string.
@@ -262,8 +262,7 @@ inline Arg argv_cast(char* argv) {
         else if constexpr (std::same_as<Arg, long long>)
             arg = std::stoll(argv, &pos);
         else if constexpr (
-                std::same_as<Arg, unsigned long> or
-                std::same_as<Arg, unsigned>)
+            std::same_as<Arg, unsigned long> or std::same_as<Arg, unsigned>)
             arg = std::stoul(argv, &pos);
         else if constexpr (std::same_as<Arg, unsigned long long>)
             arg = std::stoull(argv, &pos);
@@ -274,8 +273,8 @@ inline Arg argv_cast(char* argv) {
         else if constexpr (std::same_as<Arg, long double>)
             arg = std::stold(argv, &pos);
         else if constexpr (
-                std::same_as<Arg, char> or //
-                std::same_as<Arg, unsigned char>)
+            std::same_as<Arg, char> or //
+            std::same_as<Arg, unsigned char>)
             arg = argv[pos++];
         else if constexpr (std::same_as<Arg, bool>) {
             std::string_view sv(argv);
@@ -305,11 +304,11 @@ inline Arg argv_cast(char* argv) {
 ///
 /// This class provides an interface to process command-line arguments
 /// in a convenient and self-documenting way. The implementation uses the
-/// type-signatures of specified option variables to verify usage and issue 
-/// descriptive error messages. A reference to a string is returned whenever 
-/// an option is specified, to allow client code to attach a help message. 
-/// Then, by passing the built-in default option `-h/--help`, the 
-/// implementation automatically formats and displays all help 
+/// type-signatures of specified option variables to verify usage and issue
+/// descriptive error messages. A reference to a string is returned whenever
+/// an option is specified, to allow client code to attach a help message.
+/// Then, by passing the built-in default option `-h/--help`, the
+/// implementation automatically formats and displays all help
 /// messages.
 ///
 class OptionParser {
@@ -403,9 +402,9 @@ class OptionParser {
                         // Not enough args? or no args and eq?
                         if (option.argc > argc or (option.argc == 0 and eq))
                             throw std::runtime_error(to_string(
-                                    option.nice_name(), " expects ",
-                                    BashCode::FgLightBlue, option.types,
-                                    BashCode::FgDefault));
+                                option.nice_name(), " expects ",
+                                BashCode::FgLightBlue, option.types,
+                                BashCode::FgDefault));
                         option.on_option(argv);
                         option_ok = true;
                         argc -= option.argc;
@@ -415,7 +414,7 @@ class OptionParser {
                 }
                 if (not option_ok)
                     throw std::runtime_error(to_string(
-                            BashCode::Error, *argv, BashCode::ResetError));
+                        BashCode::Error, *argv, BashCode::ResetError));
             }
             else {
                 if (eq)
@@ -437,8 +436,8 @@ class OptionParser {
                         group->on_positional(std::string_view(*argv));
                     else
                         throw std::runtime_error(to_string(
-                                "Unexpected positional argument ",
-                                BashCode::Error, *argv, BashCode::ResetError));
+                            "Unexpected positional argument ", BashCode::Error,
+                            *argv, BashCode::ResetError));
                 }
                 --argc;
                 ++argv;
@@ -465,12 +464,12 @@ class OptionParser {
         std::string nice_name() const {
             if (names[1].empty())
                 return to_string(
-                        BashCode::Bold, names[0], BashCode::ResetBoldDim);
+                    BashCode::Bold, names[0], BashCode::ResetBoldDim);
             else
                 return to_string(
-                        BashCode::Bold, names[0], BashCode::ResetBoldDim,
-                        BashCode::Dim, '/', BashCode::ResetBoldDim,
-                        BashCode::Bold, names[1], BashCode::ResetBoldDim);
+                    BashCode::Bold, names[0], BashCode::ResetBoldDim,
+                    BashCode::Dim, '/', BashCode::ResetBoldDim, BashCode::Bold,
+                    names[1], BashCode::ResetBoldDim);
         }
         std::string types;
         std::function<void(char**)> on_option;
@@ -486,15 +485,15 @@ class OptionParser {
                 names[0] = names[0].substr(0, pos);
             }
             init_callback(
-                    std::forward<Call>(call),
-                    callable_indexed_type_list_t<Call>{});
+                std::forward<Call>(call),
+                callable_indexed_type_list_t<Call>{});
         }
         template <typename Call, typename... Args>
         void init_callback(Call&& call, type_list<Args...>) {
             argc = sizeof...(Args);
             if (argc > 0) {
                 constexpr const char* argv_types[] = {
-                        argv_type<std::decay_t<typename Args::type>>()...};
+                    argv_type<std::decay_t<typename Args::type>>()...};
                 types = argv_types[0];
                 for (auto itr = &argv_types[0] + 1;
                      itr < &argv_types[0] + argc; itr++) {
@@ -506,15 +505,14 @@ class OptionParser {
                 try {
                     (void)argv;
                     call(argv_cast<std::decay_t<typename Args::type>>(
-                            argv[Args::index])...);
+                        argv[Args::index])...);
                 }
                 catch (const std::exception&) {
                     // If an argument cast throws, intercept
                     // it and rethrow with a better error message.
                     throw std::runtime_error(to_string(
-                            nice_name(), " expects ", //
-                            BashCode::FgLightBlue, types,
-                            BashCode::FgDefault));
+                        nice_name(), " expects ", //
+                        BashCode::FgLightBlue, types, BashCode::FgDefault));
                 }
             };
         }
@@ -527,7 +525,7 @@ class OptionParser {
                 return {};
             else
                 return to_string(
-                        BashCode::Underline, name, BashCode::ResetUnderline);
+                    BashCode::Underline, name, BashCode::ResetUnderline);
         }
         std::list<Option> options;
         std::function<void()> on_begin;
@@ -572,13 +570,6 @@ class OptionParser {
         return stream;
     }
 };
-
-#if 0
-
-class OptionParser {
-  public:
-};
-#endif
 
 } // namespace pre
 
