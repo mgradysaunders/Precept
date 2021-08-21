@@ -113,27 +113,7 @@ using Noise4 = Noise<Float, 4>;
 
 template <std::floating_point Float, size_t Dim>
 struct NoiseLayer {
-    std::uint32_t seed = 0;
-
-    Float gain = 1;
-
-    Float bias = 0;
-
-    Array<Float, Dim, Dim> scale = Array<Float, Dim, Dim>::identity();
-
-    Array<Float, Dim> shift = Array<Float, Dim>(0);
-
-    bool turbulent = false;
-
-    void serialize(auto& serializer) {
-        serializer <=> seed;
-        serializer <=> gain;
-        serializer <=> bias;
-        serializer <=> scale;
-        serializer <=> shift;
-        serializer <=> turbulent;
-    }
-
+  public:
     using Result = typename Noise<Float, Dim>::Result;
 
     template <std::floating_point... Floats>
@@ -157,23 +137,40 @@ struct NoiseLayer {
         result.deriv = dot(result.deriv, scale);
         return result;
     }
+
+  public:
+    std::uint32_t seed = 0;
+
+    Float gain = 1;
+
+    Float bias = 0;
+
+    Array<Float, Dim, Dim> scale = Array<Float, Dim, Dim>::identity();
+
+    Array<Float, Dim> shift = Array<Float, Dim>(0);
+
+    bool turbulent = false;
+
+    void serialize(auto& serializer) {
+        serializer <=> seed;
+        serializer <=> gain;
+        serializer <=> bias;
+        serializer <=> scale;
+        serializer <=> shift;
+        serializer <=> turbulent;
+    }
 };
 
 template <std::floating_point Float, size_t Dim>
 struct NoiseLayerSum {
-    using Layer = NoiseLayer<Float, Dim>;
-
-    using Layers = std::vector<Layer>;
-
-    Layers layers;
-
-    void serialize(auto& serializer) {
-        serializer <=> layers;
-    }
-
+  public:
     template <typename... Args>
     NoiseLayerSum(Args&&... args) : layers{std::forward<Args>(args)...} {
     }
+
+    using Layer = NoiseLayer<Float, Dim>;
+
+    using Layers = std::vector<Layer>;
 
     using Result = typename Noise<Float, Dim>::Result;
 
@@ -193,6 +190,14 @@ struct NoiseLayerSum {
         return result;
     }
 
+  public:
+    Layers layers;
+
+    void serialize(auto& serializer) {
+        serializer <=> layers;
+    }
+
+  public:
     static NoiseLayerSum Fbm(
         int seed,
         int octaves = 6,
