@@ -1,0 +1,110 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_POOL_VECTOR
+#define PRE_GRAPHICS_POOL_VECTOR
+
+#include <vector>
+#include <pre/meta>
+
+namespace pre {
+
+template <typename Node>
+struct PoolVector : ArrayLike<PoolVector<Node>, Node> {
+  public:
+    using Int = std::int32_t;
+
+    static constexpr Int Nil = -1;
+
+  public:
+    /// \name Container API
+    /** \{ */
+
+    constexpr size_t size() const noexcept {
+        return pool.size();
+    }
+
+    constexpr Node* begin() noexcept {
+        return pool.data();
+    }
+
+    constexpr const Node* begin() const noexcept {
+        return pool.data();
+    }
+
+    constexpr Node* end() noexcept {
+        return pool.data() + pool.size();
+    }
+
+    constexpr const Node* end() const noexcept {
+        return pool.data() + pool.size();
+    }
+
+    /** \} */
+
+  public:
+    void clear() noexcept {
+        pool.clear();
+        free = Nil;
+    }
+
+    size_t memory_usage() const noexcept {
+        return pool.capacity() * sizeof(Node);
+    }
+
+    Int allocate() {
+        if (free == Nil) {
+            Int next = pool.size();
+            pool.resize(next == 0 ? 32 : 2 * next);
+            for (Int node = next; node < Int(pool.size()); node++)
+                pool[node].next = node + 1;
+            pool.back().next = -1;
+            free = next;
+        }
+        Int node = free;
+        free = pool[node].next;
+        pool[node] = Node();
+        return node;
+    }
+
+    void deallocate(Int node) {
+        pool[node].~Node();
+        pool[node].next = free, free = node;
+    }
+
+  public:
+    std::vector<Node> pool;
+
+    Int free = Nil;
+};
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_POOL_VECTOR

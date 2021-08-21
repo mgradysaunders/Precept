@@ -1,18 +1,6 @@
 #include <pre-graphics/DynamicBbTree>
 
-#include "GrowPoolVector.h"
-
 namespace pre {
-
-template <size_t Dim>
-typename DynamicBbTree<Dim>::Int DynamicBbTree<Dim>::private_allocate() {
-    if (free_ == Nil)
-        free_ = GrowPoolVector(nodes_, &Node::next);
-    Int node = free_;
-    free_ = nodes_[node].next;
-    nodes_[node] = Node();
-    return node;
-}
 
 template <size_t Dim>
 void DynamicBbTree<Dim>::private_insert(Int leaf) {
@@ -46,7 +34,7 @@ void DynamicBbTree<Dim>::private_insert(Int leaf) {
                                              : node_ref.child1;
     }
     Int old_parent = nodes_[node].parent;
-    Int new_parent = private_allocate();
+    Int new_parent = nodes_.allocate();
     Node& new_parent_ref = nodes_[new_parent];
     new_parent_ref.box = leaf_box | nodes_[node].box;
     new_parent_ref.parent = old_parent;
@@ -93,7 +81,8 @@ void DynamicBbTree<Dim>::private_remove(Int leaf) {
         else
             nodes_[grandparent].child1 = sibling;
         nodes_[sibling].parent = grandparent;
-        private_deallocate(parent);
+        nodes_[parent].height = -1;
+        nodes_.deallocate(parent);
 
         Int node = grandparent;
         while (node != Nil) {
@@ -110,7 +99,8 @@ void DynamicBbTree<Dim>::private_remove(Int leaf) {
     else {
         root_ = sibling;
         nodes_[sibling].parent = Nil;
-        private_deallocate(parent);
+        nodes_[parent].height = -1;
+        nodes_.deallocate(parent);
     }
 }
 

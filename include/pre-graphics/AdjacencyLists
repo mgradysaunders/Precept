@@ -31,8 +31,7 @@
 #ifndef PRE_GRAPHICS_ADJACENCY_LISTS
 #define PRE_GRAPHICS_ADJACENCY_LISTS
 
-#include <vector>
-#include <pre/meta>
+#include <pre-graphics/PoolVector>
 #include <pre-graphics/UserData>
 
 namespace pre {
@@ -55,9 +54,9 @@ class AdjacencyLists {
         Int node = Nil;
     };
 
-    using Nodes = std::vector<Node>;
+    using Nodes = PoolVector<Node>;
 
-    using Links = std::vector<Link>;
+    using Links = PoolVector<Link>;
 
   public:
     AdjacencyLists() = default;
@@ -73,7 +72,7 @@ class AdjacencyLists {
   public:
     /// Insert node.
     Int insert(UserData userdata = {}) {
-        Int node = private_allocate_node();
+        Int node = nodes_.allocate();
         nodes_[node].userdata = userdata;
         return node;
     }
@@ -81,14 +80,12 @@ class AdjacencyLists {
     /// Disconnect and remove node.
     void remove(Int node) {
         disconnect(node);
-        private_deallocate_node(node);
+        nodes_.deallocate(node);
     }
 
     void clear() noexcept {
         nodes_.clear();
         links_.clear();
-        free_node_ = Nil;
-        free_link_ = Nil;
     }
 
     void clear_connections() noexcept {
@@ -96,8 +93,7 @@ class AdjacencyLists {
     }
 
     size_t memory_usage() const noexcept {
-        return nodes_.capacity() * sizeof(Node) +
-               links_.capacity() * sizeof(Link);
+        return nodes_.memory_usage() + links_.memory_usage();
     }
 
     /// Connect 1-way. Existing connections will not be duplicated.
@@ -215,25 +211,7 @@ class AdjacencyLists {
 
     Links links_;
 
-    Int free_node_ = Nil;
-
-    Int free_link_ = Nil;
-
   private:
-    Int private_allocate_node();
-
-    Int private_allocate_link();
-
-    void private_deallocate_node(Int node) {
-        nodes_[node].next = free_node_;
-        free_node_ = node;
-    }
-
-    void private_deallocate_link(Int link) {
-        links_[link].next = free_link_;
-        free_link_ = link;
-    }
-
     void private_connect(Int node0, Int node1, Int Node::*list);
 
     void private_disconnect(Int node0, Int node1, Int Node::*list);

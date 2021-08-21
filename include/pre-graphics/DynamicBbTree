@@ -33,6 +33,7 @@
 
 #include <pre-graphics/Bound>
 #include <pre-graphics/GrowableStack>
+#include <pre-graphics/PoolVector>
 #include <pre-graphics/UserData>
 
 namespace pre {
@@ -73,7 +74,7 @@ class DynamicBbTree {
         }
     };
 
-    using Nodes = std::vector<Node>;
+    using Nodes = PoolVector<Node>;
 
   public:
     DynamicBbTree() = default;
@@ -89,7 +90,6 @@ class DynamicBbTree {
   public:
     void clear() noexcept {
         nodes_.clear();
-        free_ = Nil;
         root_ = Nil;
     }
 
@@ -122,7 +122,7 @@ class DynamicBbTree {
     }
 
     Int insert(const Box& box, UserData userdata = {}) {
-        Int node = private_allocate();
+        Int node = nodes_.allocate();
         Node& node_ref = nodes_[node];
         node_ref.box = box;
         node_ref.height = 0;
@@ -133,7 +133,8 @@ class DynamicBbTree {
 
     void remove(Int node) {
         private_remove(node);
-        private_deallocate(node);
+        nodes_[node].height = -1;
+        nodes_.deallocate(node);
     }
 
     void update(Int node, const Box& box) {
@@ -188,19 +189,9 @@ class DynamicBbTree {
   private:
     Nodes nodes_;
 
-    Int free_ = Nil;
-
     Int root_ = Nil;
 
   private:
-    Int private_allocate();
-
-    void private_deallocate(Int node) {
-        nodes_[node].next = free_;
-        nodes_[node].height = -1;
-        free_ = node;
-    }
-
     void private_insert(Int node);
 
     void private_remove(Int node);

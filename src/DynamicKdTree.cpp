@@ -1,7 +1,5 @@
 #include <pre-graphics/DynamicKdTree>
 
-#include "GrowPoolVector.h"
-
 namespace pre {
 
 template <size_t Dim>
@@ -103,17 +101,6 @@ void DynamicKdTree<Dim>::nearest(
             todo.push(child1);
     }
     std::sort_heap(near.begin(), heap);
-}
-
-template <size_t Dim>
-typename DynamicKdTree<Dim>::Int DynamicKdTree<Dim>::private_allocate() {
-    if (free_ == Nil)
-        free_ = GrowPoolVector(nodes_, &Node::next);
-    Int node = free_;
-    free_ = nodes_[node].next;
-    nodes_[node] = Node();
-    node_count_++;
-    return node;
 }
 
 template <size_t Dim>
@@ -226,7 +213,9 @@ void DynamicKdTree<Dim>::private_rebalance() {
     box_ = {};
     for (Int node = 0; node < Int(nodes_.size()); node++) {
         if (nodes_[node].dead) { // Dead?
-            private_deallocate(node);
+            nodes_[node].height = -1;
+            nodes_.deallocate(node);
+            node_count_--;
             continue;
         }
         Node& node_ref = nodes_[node];

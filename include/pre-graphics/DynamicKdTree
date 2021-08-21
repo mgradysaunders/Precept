@@ -33,6 +33,7 @@
 
 #include <pre-graphics/Bound>
 #include <pre-graphics/GrowableStack>
+#include <pre-graphics/PoolVector>
 #include <pre-graphics/UserData>
 
 namespace pre {
@@ -77,7 +78,7 @@ class DynamicKdTree {
         }
     };
 
-    using Nodes = std::vector<Node>;
+    using Nodes = PoolVector<Node>;
 
   public:
     DynamicKdTree() = default;
@@ -93,7 +94,6 @@ class DynamicKdTree {
   public:
     void clear() noexcept {
         nodes_.clear();
-        free_ = Nil;
         root_ = Nil;
         node_count_ = 0;
         dead_count_ = 0;
@@ -143,18 +143,22 @@ class DynamicKdTree {
     }
 
     Int insert(const Point& point, UserData userdata = {}) {
-        Int node = private_allocate();
+        Int node = nodes_.allocate();
         Node& node_ref = nodes_[node];
         node_ref.point = point;
         node_ref.height = 0;
         node_ref.userdata = userdata;
         private_insert(node);
+        node_count_++;
         return node;
     }
 
     void remove(Int node) {
-        if (private_remove(node))
-            private_deallocate(node);
+        if (private_remove(node)) {
+            nodes_[node].height = -1;
+            nodes_.deallocate(node);
+            node_count_--;
+        }
     }
 
     void rebalance() {
@@ -220,8 +224,6 @@ class DynamicKdTree {
   private:
     Nodes nodes_;
 
-    Int free_ = Nil;
-
     Int root_ = Nil;
 
     Int node_count_ = 0;
@@ -233,15 +235,6 @@ class DynamicKdTree {
     Box box_;
 
   private:
-    Int private_allocate();
-
-    void private_deallocate(Int node) {
-        node_count_--;
-        nodes_[node].next = free_;
-        nodes_[node].height = -1;
-        free_ = node;
-    }
-
     Int private_select_axis(Int node);
 
     void private_insert(Int node);
