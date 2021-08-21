@@ -31,15 +31,16 @@
 #ifndef PRE_GRAPHICS_SIMPLEX_NOISE
 #define PRE_GRAPHICS_SIMPLEX_NOISE
 
+#include <vector>
 #include <pre/Array>
 #include <pre/random>
 
 namespace pre {
 
 /// A simplex noise generator.
-template <std::floating_point Float, size_t N>
+template <std::floating_point Float, size_t Dim>
 struct Noise {
-    static_assert(N <= 16, "Probably not robust beyond 16 dimensions!");
+    static_assert(Dim <= 16, "Probably not robust beyond 16 dimensions!");
 
   public:
     constexpr Noise() noexcept = default;
@@ -47,32 +48,33 @@ struct Noise {
     }
 
     struct Result {
-        Float value = 0;            ///< Value in [-1, +1].
-        Array<Float, N> deriv = {}; ///< Partial derivatives.
+        Float value = 0;              ///< Value in [-1, +1].
+        Array<Float, Dim> deriv = {}; ///< Partial derivatives.
     };
 
     template <std::floating_point... Floats>
     Result operator()(Floats... t) const noexcept {
-        static_assert(sizeof...(Floats) == N);
+        static_assert(sizeof...(Floats) == Dim);
         return operator()(Array{t...});
     }
 
-    Result operator()(Array<Float, N> t) const noexcept {
-        static const Float f = (1.0 / N) * (pre::sqrt(1.0 + N) - 1.0);
-        static const Float g = (1.0 / N) * (1.0 - 1.0 / pre::sqrt(1.0 + N));
-        Array<Float, N> skew = t + f * t.sum();
-        Array<int, N> skew0 = fast_floor(skew);
+    Result operator()(Array<Float, Dim> t) const noexcept {
+        static constexpr int n = Dim;
+        static const Float f = (1.0 / n) * (pre::sqrt(1.0 + n) - 1.0);
+        static const Float g = (1.0 / n) * (1.0 - 1.0 / pre::sqrt(1.0 + n));
+        Array<Float, Dim> skew = t + f * t.sum();
+        Array<int, Dim> skew0 = fast_floor(skew);
         skew -= skew0;
         int skew0_sum = skew0.sum();
-        Array<int, N> skew_index = skew0;
-        Array<int, N> skew_order = skew.sorted_indexes().reversed();
+        Array<int, Dim> skew_index = skew0;
+        Array<int, Dim> skew_order = skew.sorted_indexes().reversed();
         Result result;
-        for (int k = 0; k <= int(N); k++) {
-            Array<Float, N> corner = skew_index - g * (skew0_sum + k);
-            Array<Float, N> offset = t - corner;
+        for (int k = 0; k <= n; k++) {
+            Array<Float, Dim> corner = skew_index - g * (skew0_sum + k);
+            Array<Float, Dim> offset = t - corner;
             if (Float env = Float(0.5) - dot(offset, offset); env > 0) {
                 Pcg32 rand(seed, cantor(skew_index));
-                Array<Float, N> grad(rand, [](auto& rand) {
+                Array<Float, Dim> grad(rand, [](auto& rand) {
                     return (Float(2) / Float(15)) * rand(16) - Float(1);
                 });
                 Float proj = dot(grad, offset);
@@ -80,15 +82,14 @@ struct Noise {
                 result.value += env2 * proj;
                 result.deriv += env2 * grad - 4 * env * proj * offset;
             }
-            if (k < int(N))
+            if (k < n)
                 ++skew_index[skew_order[k]];
         }
         result.value *= 20;
         result.deriv *= 20;
         if (pre::abs(result.value) > Float(0.5)) {
             Float sat = pre::exp(1 - 2 * pre::abs(result.value));
-            result.value =
-                    pre::copysign(Float(1), result.value) * (1 - sat / 2);
+            result.value = pre::copysign(1 - sat / 2, result.value);
             result.deriv *= sat;
         }
         return result;
@@ -110,9 +111,113 @@ using Noise3 = Noise<Float, 3>;
 template <std::floating_point Float = float>
 using Noise4 = Noise<Float, 4>;
 
-// TODO NoiseLayer
+template <std::floating_point Float, size_t Dim>
+struct NoiseLayer {
+    std::uint32_t seed = 0;
 
-// TODO NoiseLayerSum
+    Float gain = 1;
+
+    Float bias = 0;
+
+    Array<Float, Dim, Dim> scale = Array<Float, Dim, Dim>::identity();
+
+    Array<Float, Dim> shift = Array<Float, Dim>(0);
+
+    bool turbulent = false;
+
+    void serialize(auto& serializer) {
+        serializer <=> seed;
+        serializer <=> gain;
+        serializer <=> bias;
+        serializer <=> scale;
+        serializer <=> shift;
+        serializer <=> turbulent;
+    }
+
+    using Result = typename Noise<Float, Dim>::Result;
+
+    template <std::floating_point... Floats>
+    Result operator()(Floats... t) const noexcept {
+        static_assert(sizeof...(Floats) == Dim);
+        return operator()(Array{t...});
+    }
+
+    Result operator()(Array<Float, Dim> t) const noexcept {
+        Result result = Noise<Float, Dim>{seed}(dot(scale, t) + shift);
+        if (turbulent) {
+            if (result.value < 0) {
+                result.value *= -1;
+                result.deriv *= -1;
+            }
+            result.value = result.value * 2 - 1;
+            result.deriv = result.deriv * 2;
+        }
+        result.value = result.value * gain + bias;
+        result.deriv = result.deriv * gain;
+        result.deriv = dot(result.deriv, scale);
+        return result;
+    }
+};
+
+template <std::floating_point Float, size_t Dim>
+struct NoiseLayerSum {
+    using Layer = NoiseLayer<Float, Dim>;
+
+    using Layers = std::vector<Layer>;
+
+    Layers layers;
+
+    void serialize(auto& serializer) {
+        serializer <=> layers;
+    }
+
+    template <typename... Args>
+    NoiseLayerSum(Args&&... args) : layers{std::forward<Args>(args)...} {
+    }
+
+    using Result = typename Noise<Float, Dim>::Result;
+
+    template <std::floating_point... Floats>
+    Result operator()(Floats... t) const noexcept {
+        static_assert(sizeof...(Floats) == Dim);
+        return operator()(Array{t...});
+    }
+
+    Result operator()(Array<Float, Dim> t) const noexcept {
+        Result result = {};
+        for (const Layer& layer : layers) {
+            auto [value, deriv] = layer(t);
+            result.value += value;
+            result.deriv += deriv;
+        }
+        return result;
+    }
+
+    static NoiseLayerSum Fbm(
+        int seed,
+        int octaves = 6,
+        Float persistence = 0.5123,
+        Float lacunarity = 0.4724) {
+        Pcg32 rand(seed);
+        Layers layers;
+        layers.reserve(octaves);
+        Float gain = 1;
+        Float freq = 4;
+        while (octaves-- > 0) {
+            Layer& layer = layers.emplace_back();
+            layer.seed = rand();
+            layer.gain = gain;
+            layer.scale->diag() = 1 / freq;
+            layer.shift = Array<Float, Dim>(rand, [](auto& rand) {
+                return pre::generate_canonical<Float>(rand) * 2 - 1;
+            });
+            layer.turbulent = true;
+            gain *= persistence;
+            freq *= lacunarity;
+        }
+        return layers;
+    }
+};
 
 } // namespace pre
 
