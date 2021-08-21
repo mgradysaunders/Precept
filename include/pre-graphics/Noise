@@ -28,8 +28,8 @@
  */
 /*-*-*-*-*-*-*/
 #pragma once
-#ifndef PRE_GRAPHICS_SIMPLEX_NOISE
-#define PRE_GRAPHICS_SIMPLEX_NOISE
+#ifndef PRE_GRAPHICS_NOISE
+#define PRE_GRAPHICS_NOISE
 
 #include <vector>
 #include <pre/Array>
@@ -225,4 +225,4 @@ struct NoiseLayerSum {
 
 } // namespace pre
 
-#endif // #ifndef PRE_GRAPHICS_SIMPLEX_NOISE
+#endif // #ifndef PRE_GRAPHICS_NOISE
