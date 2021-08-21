@@ -211,7 +211,6 @@ struct NoiseLayerSum {
             layer.shift = Array<Float, Dim>(rand, [](auto& rand) {
                 return pre::generate_canonical<Float>(rand) * 2 - 1;
             });
-            layer.turbulent = true;
             gain *= persistence;
             freq *= lacunarity;
         }
