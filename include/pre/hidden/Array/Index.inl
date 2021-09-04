@@ -17,13 +17,13 @@ struct ArrayIndex : ArrayLike<ArrayIndex<Rank>, ssize_t> {
     template <std::ranges::input_range Ints>
     constexpr ArrayIndex(const Ints& arr) noexcept {
         std::copy_n(
-                std::ranges::begin(arr),
-                std::min(Rank, size_t(std::ranges::size(arr))), &values[0]);
+            std::ranges::begin(arr),
+            std::min(Rank, size_t(std::ranges::size(arr))), &values[0]);
     }
 
     template <std::input_iterator Iterator, size_t IgnoreRank>
     constexpr ArrayIndex(
-            Iterator& itr, const ArrayIndex<IgnoreRank>& ignore) noexcept {
+        Iterator& itr, const ArrayIndex<IgnoreRank>& ignore) noexcept {
         for (size_t dim = 0; dim < Rank; dim++)
             if (not ignore.contains(dim))
                 values[dim] = *itr++;
@@ -108,6 +108,18 @@ struct ArrayIndex : ArrayLike<ArrayIndex<Rank>, ssize_t> {
         for (size_t dim = 1; dim < Rank; dim++)
             res *= values[dim];
         return res;
+    }
+
+    template <size_t HeadRank>
+    constexpr ArrayIndex<HeadRank> head() const noexcept {
+        return IteratorRange(begin(), begin() + HeadRank);
+        static_assert(HeadRank <= Rank);
+    }
+
+    template <size_t TailRank>
+    constexpr ArrayIndex<TailRank> tail() const noexcept {
+        return IteratorRange(begin() + TailRank, end());
+        static_assert(TailRank <= Rank);
     }
 
     /// Join/concatenate with other ints.

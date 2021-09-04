@@ -32,7 +32,7 @@ constexpr Array<Arith, 2> cross(const Array<Arith, 2>& arr) noexcept {
 ///
 template <typename Arith0, typename Arith1>
 constexpr auto cross(
-        const Array<Arith0, 2>& arr0, const Array<Arith1, 2>& arr1) noexcept {
+    const Array<Arith0, 2>& arr0, const Array<Arith1, 2>& arr1) noexcept {
     return dot(arr0, cross(arr1));
 }
 
@@ -71,11 +71,11 @@ constexpr Array<Arith, 3, 3> cross(const Array<Arith, 3>& arr) noexcept {
 ///
 template <typename Arith0, typename Arith1>
 constexpr auto cross(
-        const Array<Arith0, 3>& arr0, const Array<Arith1, 3>& arr1) noexcept {
+    const Array<Arith0, 3>& arr0, const Array<Arith1, 3>& arr1) noexcept {
     return Array<decltype(Arith0() * Arith1()), 3>{
-            arr0[1] * arr1[2] - arr0[2] * arr1[1],
-            arr0[2] * arr1[0] - arr0[0] * arr1[2],
-            arr0[0] * arr1[1] - arr0[1] * arr1[0]};
+        arr0[1] * arr1[2] - arr0[2] * arr1[1],
+        arr0[2] * arr1[0] - arr0[0] * arr1[2],
+        arr0[0] * arr1[1] - arr0[1] * arr1[0]};
 }
 
 /// 3-dimensional cross product.
@@ -90,9 +90,9 @@ constexpr auto cross(
 ///
 template <typename Arith0, typename Arith1, typename Arith2>
 constexpr auto cross(
-        const Array<Arith0, 3>& arr0,
-        const Array<Arith1, 3>& arr1,
-        const Array<Arith2, 3>& arr2) noexcept {
+    const Array<Arith0, 3>& arr0,
+    const Array<Arith1, 3>& arr1,
+    const Array<Arith2, 3>& arr2) noexcept {
     return dot(arr0, cross(arr1, arr2));
 }
 
@@ -112,37 +112,31 @@ constexpr auto cross(
 template <concepts::arithmetic_or_complex Arith, size_t N>
 inline auto length(const Array<Arith, N>& arr) noexcept {
     if constexpr (N == 1) {
-        return pre::abs(arr[0]);
+        return std::abs(arr[0]);
     }
     else if constexpr (N == 2) {
-        return pre::hypot(pre::abs(arr[0]), pre::abs(arr[1]));
+        return std::hypot(std::abs(arr[0]), std::abs(arr[1]));
     }
     else {
         using Float = to_floating_point_t<Arith>;
         Array<Float, N> tmp = pre::abs(arr);
-        Float tmp_max = 0;
-        for (Float tmp_value : tmp)
-            if (tmp_value != 0)
-                tmp_max = pre::max(tmp_max, tmp_value);
-        if (tmp_max == 0) {
-            return tmp_max;
-        }
-        else if (
-                tmp_max * tmp_max >= numeric_limits<Float>::max() / N ||
-                tmp_max <= numeric_limits<Float>::min_squarable()) {
-            if (tmp_max >= numeric_limits<Float>::min_invertible())
-                tmp *= 1 / tmp_max;
+        Float biggest = tmp[tmp.argmax()];
+        if (biggest == 0)
+            return Float(0);
+        if (biggest * biggest >= Maximum<Float> / N ||
+            biggest <= numeric_limits<Float>::min_squarable()) {
+            if (biggest >= numeric_limits<Float>::min_invertible())
+                tmp *= 1 / biggest;
             else
-                tmp /= tmp_max; // Inverse overflows.
-            return pre::sqrt(dot(tmp, tmp)) * tmp_max;
+                tmp /= biggest; // Inverse overflows.
+            return std::sqrt(dot(tmp, tmp)) * biggest;
         }
-        else {
-            return pre::sqrt(dot(tmp, tmp));
-        }
+        else
+            return std::sqrt(dot(tmp, tmp));
     }
 }
 
-/// Euclidean length-squared.
+/// Euclidean length squared.
 ///
 /// \par Expression
 /// \f[
@@ -164,14 +158,14 @@ inline auto length2(const Array<Arith, N>& arr) noexcept {
 /// Euclidean distance.
 template <concepts::arithmetic Arith0, concepts::arithmetic Arith1, size_t N>
 inline auto distance(
-        const Array<Arith0, N>& arr0, const Array<Arith1, N>& arr1) noexcept {
+    const Array<Arith0, N>& arr0, const Array<Arith1, N>& arr1) noexcept {
     return length(arr0 - arr1);
 }
 
-/// Euclidean distance-squared.
+/// Euclidean distance squared.
 template <concepts::arithmetic Arith0, concepts::arithmetic Arith1, size_t N>
 inline auto distance2(
-        const Array<Arith0, N>& arr0, const Array<Arith1, N>& arr1) noexcept {
+    const Array<Arith0, N>& arr0, const Array<Arith1, N>& arr1) noexcept {
     return length2(arr0 - arr1);
 }
 
@@ -188,8 +182,8 @@ inline auto normalize(const Array<Arith, N>& arr) noexcept {
 
 /// Normalize by Euclidean length, component version.
 template <
-        concepts::arithmetic_or_complex Arith,
-        concepts::arithmetic_or_complex... Ariths>
+    concepts::arithmetic_or_complex Arith,
+    concepts::arithmetic_or_complex... Ariths>
 inline auto normalize(Arith x0, Ariths... xs) noexcept {
     return normalize(Array{x0, xs...});
 }
@@ -202,8 +196,8 @@ inline auto fast_normalize(const Array<Arith, N>& arr) noexcept {
 
 /// Fast (unsafe) normalize by Euclidean length, component version.
 template <
-        concepts::arithmetic_or_complex Arith,
-        concepts::arithmetic_or_complex... Ariths>
+    concepts::arithmetic_or_complex Arith,
+    concepts::arithmetic_or_complex... Ariths>
 inline auto fast_normalize(Arith x0, Ariths... xs) noexcept {
     return fast_normalize(Array{x0, xs...});
 }
@@ -211,7 +205,7 @@ inline auto fast_normalize(Arith x0, Ariths... xs) noexcept {
 /// Angle between vectors in 2-dimensions.
 template <concepts::arithmetic Arith0, concepts::arithmetic Arith1>
 inline auto angle_between(
-        const Array<Arith0, 2>& arr0, const Array<Arith1, 2>& arr1) noexcept {
+    const Array<Arith0, 2>& arr0, const Array<Arith1, 2>& arr1) noexcept {
     return pre::atan2(cross(arr0, arr1), dot(arr0, arr1));
 }
 
@@ -262,8 +256,8 @@ inline auto inverse(const Array<Arith, N, N>& arr) noexcept {
         }
         else if constexpr (N == 2) {
             Array<Field, 2, 2> cof = {
-                    +arr(1, 1), -arr(1, 0), //
-                    -arr(0, 1), +arr(0, 0)};
+                +arr(1, 1), -arr(1, 0), //
+                -arr(0, 1), +arr(0, 0)};
             return transpose(cof) * (Float(1) / dot(cof[0], arr[0]));
         }
         else if constexpr (N == 3) {
@@ -308,7 +302,7 @@ inline auto svd(const Array<Arith, M, N>& arr) {
 
 template <std::integral Int, size_t N>
 constexpr Array<Int, N, N> permutation_matrix(
-        const Array<Int, N>& p) noexcept {
+    const Array<Int, N>& p) noexcept {
     Array<Int, N, N> res;
     for (size_t i = 0; i < N; i++)
         for (size_t j = 0; j < N; j++)
@@ -385,7 +379,7 @@ struct Array_initializers<Array<Float, 3>> {
     /// Uniform sphere probability density function sampling routine.
     static Vec3<Float> uniform_sphere_pdf_sample(Vec2<Float> u) noexcept {
         return sphericalz(
-                2 * u[0] - 1, 2 * numeric_constants<Float>::M_pi() * u[1]);
+            2 * u[0] - 1, 2 * numeric_constants<Float>::M_pi() * u[1]);
     }
 
     /// Cosine hemisphere probability density function.
@@ -407,10 +401,10 @@ struct Array_initializers<Array<Float, 3>> {
 
     /// Uniform cone probability density function sampling routine.
     static Vec3<Float> uniform_cone_pdf_sample(
-            Float zmax, Vec2<Float> u) noexcept {
+        Float zmax, Vec2<Float> u) noexcept {
         return sphericalz(
-                (1 - u[0]) + u[0] * zmax,
-                2 * numeric_constants<Float>::M_pi() * u[1]);
+            (1 - u[0]) + u[0] * zmax,
+            2 * numeric_constants<Float>::M_pi() * u[1]);
     }
 
     // TODO move
@@ -453,8 +447,9 @@ struct Array_initializers<Array<Float, 2, 2>> {
     /// Rotate counter-clockwise.
     static Mat2<Float> rotate(Float theta) noexcept {
         auto [sin_theta, cos_theta] = pre::sincos(theta);
-        return {+cos_theta, -sin_theta, //
-                +sin_theta, +cos_theta};
+        return {
+            +cos_theta, -sin_theta, //
+            +sin_theta, +cos_theta};
     }
 };
 
@@ -500,8 +495,7 @@ struct Array_initializers<Array<Float, 3, 3>> {
                 // Accuracy begins to suffer, so manually orthonormalize.
                 hatx = normalize(hatx - dot(hatx, hatz) * hatz);
                 haty = normalize(
-                        haty - dot(haty, hatx) * hatx -
-                        dot(haty, hatz) * hatz);
+                    haty - dot(haty, hatx) * hatx - dot(haty, hatz) * hatz);
             }
         }
         return {hatx[0], haty[0], hatz[0], //
@@ -537,15 +531,16 @@ struct Array_initializers<Array<Float, 3, 3>> {
         Float vxvx = vx * vx, vxvy = vx * vy, vxvz = vx * vz;
         Float vyvy = vy * vy, vyvz = vy * vz;
         Float vzvz = vz * vz;
-        return {vxvx * (1 - cos_theta) + cos_theta,
-                vxvy * (1 - cos_theta) - vz * sin_theta,
-                vxvz * (1 - cos_theta) + vy * sin_theta, //
-                vxvy * (1 - cos_theta) + vz * sin_theta,
-                vyvy * (1 - cos_theta) + cos_theta,
-                vyvz * (1 - cos_theta) - vx * sin_theta, //
-                vxvz * (1 - cos_theta) - vy * sin_theta,
-                vyvz * (1 - cos_theta) + vx * sin_theta,
-                vzvz * (1 - cos_theta) + cos_theta};
+        return {
+            vxvx * (1 - cos_theta) + cos_theta,
+            vxvy * (1 - cos_theta) - vz * sin_theta,
+            vxvz * (1 - cos_theta) + vy * sin_theta, //
+            vxvy * (1 - cos_theta) + vz * sin_theta,
+            vyvy * (1 - cos_theta) + cos_theta,
+            vyvz * (1 - cos_theta) - vx * sin_theta, //
+            vxvz * (1 - cos_theta) - vy * sin_theta,
+            vyvz * (1 - cos_theta) + vx * sin_theta,
+            vzvz * (1 - cos_theta) + cos_theta};
     }
 
     /// Rotate counter-clockwise around X-axis.
@@ -648,9 +643,9 @@ struct Array_initializers<Array<Float, 4, 4>> {
     /// This implementation is consistent with OpenGL conventions.
     ///
     static Mat4<Float> look_at(
-            const Vec3<Float>& pfrom,
-            const Vec3<Float>& pto,
-            const Vec3<Float>& vup) noexcept {
+        const Vec3<Float>& pfrom,
+        const Vec3<Float>& pto,
+        const Vec3<Float>& vup) noexcept {
         Vec3<Float> z = pfrom - pto;
         Vec3<Float> x = cross(vup, z);
         Vec3<Float> hatz = normalize(z);
@@ -685,18 +680,13 @@ struct Array_initializers<Array<Float, 4, 4>> {
     /// This implementation is consistent with OpenGL conventions.
     ///
     static Mat4<Float> ortho(
-            Float x0,
-            Float x1,
-            Float y0,
-            Float y1,
-            Float z0,
-            Float z1) noexcept {
+        Float x0, Float x1, Float y0, Float y1, Float z0, Float z1) noexcept {
         Mat4<Float> res;
         res->diag() = {2 / (x1 - x0), 2 / (y1 - y0), -2 / (z1 - z0), 1};
         res(Slice(0, 3), 3) = {
-                -(x1 + x0) / (x1 - x0), //
-                -(y1 + y0) / (y1 - y0), //
-                -(z1 + z0) / (z1 - z0)};
+            -(x1 + x0) / (x1 - x0), //
+            -(y1 + y0) / (y1 - y0), //
+            -(z1 + z0) / (z1 - z0)};
         return res;
     }
 
@@ -723,17 +713,12 @@ struct Array_initializers<Array<Float, 4, 4>> {
     /// This implementation is consistent with OpenGL conventions.
     ///
     static Mat4<Float> persp(
-            Float x0,
-            Float x1,
-            Float y0,
-            Float y1,
-            Float z0,
-            Float z1) noexcept {
+        Float x0, Float x1, Float y0, Float y1, Float z0, Float z1) noexcept {
         Mat4<Float> res;
         res->diag() = {
-                2 * z0 / (x1 - x0), //
-                2 * z0 / (y1 - y0), //
-                -(z1 + z0) / (z1 - z0), 0};
+            2 * z0 / (x1 - x0), //
+            2 * z0 / (y1 - y0), //
+            -(z1 + z0) / (z1 - z0), 0};
         res(Slice(0, 2), 2) = {(x1 + x0) / (x1 - x0), (y1 + y0) / (y1 - y0)};
         res(2, 3) = -2 * z1 * z0 / (z1 - z0);
         res(3, 2) = -1;

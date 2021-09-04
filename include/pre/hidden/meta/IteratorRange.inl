@@ -40,11 +40,11 @@ class IteratorRange {
 
     constexpr IteratorRange& operator=(IteratorRange&&) = default;
 
-    constexpr Iterator begin() {
+    constexpr Iterator begin() const {
         return begin_;
     }
 
-    constexpr Iterator end() {
+    constexpr Iterator end() const {
         return end_;
     }
 
