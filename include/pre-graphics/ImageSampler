@@ -38,18 +38,20 @@ namespace pre {
 template <concepts::image_data Data, size_t Rank, size_t Channels>
 struct ImageSampler {
     static_assert(
-            !std::same_as<Data, std::byte> and (0 < Rank and Rank <= 3) and
-            Channels > 0);
+        !std::same_as<Data, std::byte> and (0 < Rank and Rank <= 3) and
+        Channels > 0);
 
     using Float = std::conditional_t<
-            std::floating_point<Data>,
-            Data,
-            std::conditional_t<(sizeof(Data) < sizeof(float)), float, double>>;
+        std::floating_point<Data>,
+        Data,
+        std::conditional_t<(sizeof(Data) < sizeof(float)), float, double>>;
 
     template <typename T>
     using Coord = Array<T, Rank>;
 
     using Pixel = Array<Float, Channels>;
+
+    using Deriv = Array<Pixel, Rank>;
 
     using ImageView = ArrayView<Data, Rank + 1>;
 
@@ -68,31 +70,133 @@ struct ImageSampler {
 
     constexpr void store(Coord<int> coord, Pixel pixel) noexcept {
         std::copy(
-                pixel.begin(), //
-                pixel.end(), data(do_wrap(coord)));
+            pixel.begin(), //
+            pixel.end(), data(do_wrap(coord)));
     }
 
     constexpr Pixel linear(Coord<Float> coord) noexcept {
         int i = 0;
         Float u = fract(coord[0], &i);
-        Pixel f0;
-        Pixel f1;
+        Pixel f0, f1;
         if constexpr (Rank == 1) {
             f0 = fetch({i + 0});
             f1 = fetch({i + 1});
         }
         else {
-            f0 = operator[](do_wrap<0>(i + 0)).linear(*coord(Slice(1, Rank)));
-            f1 = operator[](do_wrap<0>(i + 1)).linear(*coord(Slice(1, Rank)));
+            Array<Float, Rank - 1> subcoord = *coord(Slice(1, Rank));
+            f0 = operator[](i + 0).linear(subcoord);
+            f1 = operator[](i + 1).linear(subcoord);
         }
         return lerp(u, f0, f1);
     }
 
+    constexpr std::pair<Pixel, Deriv> linear_with_deriv(
+        Coord<Float> coord) noexcept {
+        int i = 0;
+        Float u = fract(coord[0], &i);
+        if constexpr (Rank == 1) {
+            Pixel f0 = fetch({i + 0});
+            Pixel f1 = fetch({i + 1});
+            return {lerp(u, f0, f1), {f1 - f0}};
+        }
+        else {
+            Array<Float, Rank - 1> subcoord = *coord(Slice(1, Rank));
+            auto [f0, df0] = operator[](i + 0).linear_with_deriv(subcoord);
+            auto [f1, df1] = operator[](i + 1).linear_with_deriv(subcoord);
+            Deriv deriv;
+            deriv[0] = f1 - f0;
+            deriv(Slice(1, Rank)) = **lerp(u, df0, df1);
+            return {lerp(u, f0, f1), deriv};
+        }
+    }
+
+    static constexpr std::pair<Pixel, Pixel> monocubic_slopes(
+        const Pixel& fm,
+        const Pixel& f0,
+        const Pixel& f1,
+        const Pixel& f2) noexcept {
+        Pixel df = f1 - f0;
+        Pixel m0 = Float(0.5) * (f1 - fm);
+        Pixel m1 = Float(0.5) * (f2 - f0);
+        for (int k = 0; k < int(Channels); k++) {
+            if (df[k] == 0 or not same_signbit(m0[k], df[k]))
+                m0[k] = 0;
+            if (df[k] == 0 or not same_signbit(m1[k], df[k]))
+                m1[k] = 0;
+        }
+        return {m0, m1};
+    }
+
+    constexpr Pixel monocubic(Coord<Float> coord) noexcept {
+        int i = 0;
+        Float u = fract(coord[0], &i);
+        Pixel fm, f0, f1, f2;
+        if constexpr (Rank == 1) {
+            fm = fetch({i - 1});
+            f0 = fetch({i + 0});
+            f1 = fetch({i + 1});
+            f2 = fetch({i + 2});
+        }
+        else {
+            Array<Float, Rank - 1> subcoord = *coord(Slice(1, Rank));
+            fm = operator[](i - 1).monocubic(subcoord);
+            f0 = operator[](i + 0).monocubic(subcoord);
+            f1 = operator[](i + 1).monocubic(subcoord);
+            f2 = operator[](i + 2).monocubic(subcoord);
+        }
+        auto [m0, m1] = monocubic_slopes(fm, f0, f1, f2);
+        return hermite(u, f0, m0, m1, f1);
+    }
+
+    constexpr std::pair<Pixel, Deriv> monocubic_with_deriv(
+        Coord<Float> coord) noexcept {
+        int i = 0;
+        Float u = fract(coord[0], &i);
+        if constexpr (Rank == 1) {
+            Pixel fm = fetch({i - 1});
+            Pixel f0 = fetch({i + 0});
+            Pixel f1 = fetch({i + 1});
+            Pixel f2 = fetch({i + 2});
+            auto [m0, m1] = monocubic_slopes(fm, f0, f1, f2);
+            return {
+                hermite(u, f0, m0, m1, f1),
+                {hermite_deriv(u, f0, m0, m1, f1)}};
+        }
+        else {
+            Array<Float, Rank - 1> subcoord = *coord(Slice(1, Rank));
+            auto [fm, dfm] = operator[](i - 1).monocubic_with_deriv(subcoord);
+            auto [f0, df0] = operator[](i + 0).monocubic_with_deriv(subcoord);
+            auto [f1, df1] = operator[](i + 1).monocubic_with_deriv(subcoord);
+            auto [f2, df2] = operator[](i + 2).monocubic_with_deriv(subcoord);
+            auto df = f1 - f0;
+            auto m0 = Float(0.5) * (f1 - fm);
+            auto m1 = Float(0.5) * (f2 - f0);
+            auto dm0 = Float(0.5) * (df1 - dfm);
+            auto dm1 = Float(0.5) * (df2 - df0);
+            for (int k = 0; k < int(Channels); k++) {
+                if (df[k] == 0 or not same_signbit(m0[k], df[k])) {
+                    m0[k] = 0;
+                    for (int j = 0; j < int(Rank); j++)
+                        dm0[j][k] = 0;
+                }
+                if (df[k] == 0 or not same_signbit(m1[k], df[k])) {
+                    m1[k] = 0;
+                    for (int j = 0; j < int(Rank); j++)
+                        dm1[j][k] = 0;
+                }
+            }
+            Deriv deriv;
+            deriv[0] = hermite_deriv(u, f0, m0, m1, f1);
+            deriv(Slice(1, Rank)) = **hermite(u, df0, dm0, dm1, df1);
+            return {hermite(u, f0, m0, m1, f1), deriv};
+        }
+    }
+
     template <std::invocable<Float> Func>
     constexpr Pixel filter(
-            Coord<Float> coord, //
-            Coord<Float> width, //
-            Func&& func) noexcept {
+        Coord<Float> coord, //
+        Coord<Float> width, //
+        Func&& func) noexcept {
         Pixel fsum;
         Float wsum = 0;
         Float a = Float(1) / width[0];
@@ -107,10 +211,9 @@ struct ImageSampler {
             if constexpr (Rank == 1)
                 f = fetch({k});
             else
-                f = operator[](do_wrap<0>(k))
-                            .filter(*coord(Slice(1, Rank)),
-                                    *width(Slice(1, Rank)),
-                                    std::forward<Func>(func));
+                f = operator[](k).filter(
+                    *coord(Slice(1, Rank)), *width(Slice(1, Rank)),
+                    std::forward<Func>(func));
             fsum += w * f;
             wsum += w;
         }
@@ -121,10 +224,10 @@ struct ImageSampler {
 
     template <std::invocable<Float> Func>
     constexpr void reconstruct(
-            Pixel pixel,
-            Coord<Float> coord,
-            Coord<Float> width,
-            Func&& func) noexcept {
+        Pixel pixel,
+        Coord<Float> coord,
+        Coord<Float> width,
+        Func&& func) noexcept {
         Float a = Float(1) / width[0];
         Float b = coord[0];
         int i = 0;
@@ -136,12 +239,10 @@ struct ImageSampler {
             if constexpr (Rank == 1)
                 store({k}, fetch({k}) + w * pixel);
             else
-                operator[](do_wrap<0>(k))
-                        .reconstruct(
-                                w * pixel,              //
-                                *coord(Slice(1, Rank)), //
-                                *width(Slice(1, Rank)),
-                                std::forward<Func>(func));
+                operator[](k).reconstruct(
+                    w * pixel,              //
+                    *coord(Slice(1, Rank)), //
+                    *width(Slice(1, Rank)), std::forward<Func>(func));
         }
     }
 
@@ -155,7 +256,7 @@ struct ImageSampler {
 
     constexpr auto operator[](int k) noexcept requires(Rank > 1) {
         ImageSampler<Data, Rank - 1, Channels> result;
-        result.view = view[k];
+        result.view = view[do_wrap<0>(k)];
         result.wrap = *wrap(Slice(1, Rank));
         return result;
     }
@@ -230,24 +331,25 @@ constexpr Float mitchell(Float u) noexcept {
 
 } // namespace image_filter
 
-template <concepts::image_data Data, size_t Channels>
+template <concepts::image_data Data, size_t Channels = 1>
 using ImageSampler1 = ImageSampler<Data, 1, Channels>;
 
-template <concepts::image_data Data, size_t Channels>
+template <concepts::image_data Data, size_t Channels = 1>
 using ImageSampler2 = ImageSampler<Data, 2, Channels>;
 
-template <concepts::image_data Data, size_t Channels>
+template <concepts::image_data Data, size_t Channels = 1>
 using ImageSampler3 = ImageSampler<Data, 3, Channels>;
 
 template <concepts::image_data Data, size_t Channels>
 inline ImageSampler3<Data, Channels> make_sampler(
-        Image& image, int first = 0) {
+    Image& image, int first = 0) {
     if (image.type() != Image::Type_convert<Data>() or
         image.dims()[3] - first < int(Channels))
         throw std::invalid_argument("invalid image for sampler");
-    return {image.view<Data>()(
-                    Slice(), Slice(), Slice(), Slice(first, first + Channels)),
-            image.wrap};
+    return {
+        image.view<Data>()(
+            Slice(), Slice(), Slice(), Slice(first, first + Channels)),
+        image.wrap};
 }
 
 } // namespace pre
