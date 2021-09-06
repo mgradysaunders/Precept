@@ -8,32 +8,32 @@ namespace pre {
 
 /// Analogous to `std::min()`, except only for numbers.
 template <
-        concepts::arithmetic_or_enum Arith0,
-        concepts::arithmetic_or_enum Arith1>
+    concepts::arithmetic_or_enum Arith0,
+    concepts::arithmetic_or_enum Arith1>
 constexpr auto min(Arith0 x, Arith1 y) noexcept {
     return x < y ? x : y;
 }
 
 /// Analogous to `std::max()`, except only for numbers.
 template <
-        concepts::arithmetic_or_enum Arith0,
-        concepts::arithmetic_or_enum Arith1>
+    concepts::arithmetic_or_enum Arith0,
+    concepts::arithmetic_or_enum Arith1>
 constexpr auto max(Arith0 x, Arith1 y) noexcept {
     return x < y ? y : x;
 }
 
 /// Equivalent to `x = min(x, y)`.
 template <
-        concepts::arithmetic_or_enum Arith0,
-        concepts::arithmetic_or_enum Arith1>
+    concepts::arithmetic_or_enum Arith0,
+    concepts::arithmetic_or_enum Arith1>
 constexpr void minimize(Arith0& x, Arith1 y) noexcept {
     x = pre::min(x, y);
 }
 
 /// Equivalent to `x = max(x, y)`.
 template <
-        concepts::arithmetic_or_enum Arith0,
-        concepts::arithmetic_or_enum Arith1>
+    concepts::arithmetic_or_enum Arith0,
+    concepts::arithmetic_or_enum Arith1>
 constexpr void maximize(Arith0& x, Arith1 y) noexcept {
     x = pre::max(x, y);
 }
@@ -46,9 +46,9 @@ constexpr void maximize(Arith0& x, Arith1 y) noexcept {
 ///
 template <concepts::arithmetic_or_enum Arith>
 constexpr Arith clamp(
-        Arith x,
-        std::type_identity_t<Arith> a,
-        std::type_identity_t<Arith> b) noexcept {
+    Arith x,
+    std::type_identity_t<Arith> a,
+    std::type_identity_t<Arith> b) noexcept {
     return pre::min(pre::max(x, a), b);
 }
 
@@ -255,8 +255,8 @@ constexpr Int bit_reverse(Int val) noexcept {
     else if constexpr (sizeof(Int) == sizeof(std::uint8_t)) {
         constexpr std::uint8_t mask[3] = {0xaaU, 0xccU, 0xf0U};
         for (int k = 0; k < 3; k++)
-            val = ((val & mask[k]) >> (1 << k)) |
-                  ((val & ~mask[k]) << (1 << k));
+            val =
+                ((val & mask[k]) >> (1 << k)) | ((val & ~mask[k]) << (1 << k));
     }
     else if constexpr (sizeof(Int) == sizeof(std::uint16_t)) {
         constexpr std::uint16_t mask[4] = {0xaaaaU, 0xccccU, 0xf0f0U, 0xff00U};
@@ -266,35 +266,35 @@ constexpr Int bit_reverse(Int val) noexcept {
 #else
         for (int k = 0; k < 4; k++)
 #endif // #if __GNUC__
-            val = ((val & mask[k]) >> (1 << k)) |
-                  ((val & ~mask[k]) << (1 << k));
+            val =
+                ((val & mask[k]) >> (1 << k)) | ((val & ~mask[k]) << (1 << k));
     }
     else if constexpr (sizeof(Int) == sizeof(std::uint32_t)) {
         constexpr std::uint32_t mask[5] = {
-                0xaaaaaaaaUL, 0xccccccccUL, 0xf0f0f0f0UL, 0xff00ff00UL,
-                0xffff0000UL};
+            0xaaaaaaaaUL, 0xccccccccUL, 0xf0f0f0f0UL, 0xff00ff00UL,
+            0xffff0000UL};
 #if __GNUC__
         val = __builtin_bswap32(val);
         for (int k = 0; k < 3; k++)
 #else
         for (int k = 0; k < 5; k++)
 #endif // #if __GNUC__
-            val = ((val & mask[k]) >> (1 << k)) |
-                  ((val & ~mask[k]) << (1 << k));
+            val =
+                ((val & mask[k]) >> (1 << k)) | ((val & ~mask[k]) << (1 << k));
     }
     else if constexpr (sizeof(Int) == sizeof(std::uint64_t)) {
         constexpr std::uint64_t mask[6] = {
-                0xaaaaaaaaaaaaaaaaULL, 0xccccccccccccccccULL,
-                0xf0f0f0f0f0f0f0f0ULL, 0xff00ff00ff00ff00ULL,
-                0xffff0000ffff0000ULL, 0xffffffff00000000ULL};
+            0xaaaaaaaaaaaaaaaaULL, 0xccccccccccccccccULL,
+            0xf0f0f0f0f0f0f0f0ULL, 0xff00ff00ff00ff00ULL,
+            0xffff0000ffff0000ULL, 0xffffffff00000000ULL};
 #if __GNUC__
         val = __builtin_bswap64(val);
         for (int k = 0; k < 3; k++)
 #else
         for (int k = 0; k < 6; k++)
 #endif // #if __GNUC__
-            val = ((val & mask[k]) >> (1 << k)) |
-                  ((val & ~mask[k]) << (1 << k));
+            val =
+                ((val & mask[k]) >> (1 << k)) | ((val & ~mask[k]) << (1 << k));
     }
     return val;
 }
@@ -317,17 +317,17 @@ constexpr Int bit_interleave_zero(Int val) noexcept {
     }
     else if constexpr (sizeof(Int) == sizeof(std::uint32_t)) {
         constexpr std::uint32_t mask[5] = {
-                0xaaaaaaaaUL, 0xccccccccUL, //
-                0xf0f0f0f0UL, 0xff00ff00UL, //
-                0xffff0000UL};
+            0xaaaaaaaaUL, 0xccccccccUL, //
+            0xf0f0f0f0UL, 0xff00ff00UL, //
+            0xffff0000UL};
         for (int k = 4; k >= 0; k--)
             val = (val ^ (val << (1 << k))) & ~mask[k];
     }
     else if constexpr (sizeof(Int) == sizeof(std::uint64_t)) {
         constexpr std::uint64_t mask[6] = {
-                0xaaaaaaaaaaaaaaaaULL, 0xccccccccccccccccULL,
-                0xf0f0f0f0f0f0f0f0ULL, 0xff00ff00ff00ff00ULL,
-                0xffff0000ffff0000ULL};
+            0xaaaaaaaaaaaaaaaaULL, 0xccccccccccccccccULL,
+            0xf0f0f0f0f0f0f0f0ULL, 0xff00ff00ff00ff00ULL,
+            0xffff0000ffff0000ULL};
         for (int k = 5; k >= 0; k--)
             val = (val ^ (val << (1 << k))) & ~mask[k];
     }
@@ -481,9 +481,9 @@ inline Float finite_or_zero(Float x) noexcept {
 /// Wrap floating point number in range.
 template <std::floating_point Float>
 inline Float frepeat(
-        Float x,
-        std::type_identity_t<Float> a,
-        std::type_identity_t<Float> b) noexcept {
+    Float x,
+    std::type_identity_t<Float> a,
+    std::type_identity_t<Float> b) noexcept {
     x -= a;
     b -= a;
     Float r = std::remainder(x, b);
@@ -495,9 +495,9 @@ inline Float frepeat(
 /// Wrap floating point number in range and mirror with each repeat.
 template <std::floating_point Float>
 inline Float fmirror(
-        Float x,
-        std::type_identity_t<Float> a,
-        std::type_identity_t<Float> b) noexcept {
+    Float x,
+    std::type_identity_t<Float> a,
+    std::type_identity_t<Float> b) noexcept {
     x -= a;
     b -= a;
     int q = 0;
@@ -515,8 +515,7 @@ inline Float fmirror(
 template <std::floating_point Float>
 inline Float float_incr(Float x) noexcept {
     if constexpr (
-            std::same_as<Float, float> and
-            std::numeric_limits<float>::is_iec559) {
+        std::same_as<Float, float> and std::numeric_limits<float>::is_iec559) {
         std::uint32_t u = bit_cast<std::uint32_t>(x);
         if (u != (0x7f8UL << 20)) { // Not +Inf?
             if (u == (1UL << 31))   // Ignore -0.0.
@@ -529,8 +528,8 @@ inline Float float_incr(Float x) noexcept {
         return bit_cast<float>(u);
     }
     else if constexpr (
-            std::same_as<Float, double> and
-            std::numeric_limits<double>::is_iec559) {
+        std::same_as<Float, double> and
+        std::numeric_limits<double>::is_iec559) {
         std::uint64_t u = bit_cast<std::uint64_t>(x);
         if (u != (0x7ffULL << 52)) { // Not +Inf?
             if (u == (1ULL << 63))   // Ignore -0.0.
@@ -550,8 +549,7 @@ inline Float float_incr(Float x) noexcept {
 template <std::floating_point Float>
 inline Float float_decr(Float x) noexcept {
     if constexpr (
-            std::same_as<Float, float> and
-            std::numeric_limits<float>::is_iec559) {
+        std::same_as<Float, float> and std::numeric_limits<float>::is_iec559) {
         std::uint32_t u = bit_cast<std::uint32_t>(x);
         if (u != (0xff8UL << 20)) { // Not -Inf?
             if (u == 0)             // Ignore +0.0.
@@ -564,8 +562,8 @@ inline Float float_decr(Float x) noexcept {
         return bit_cast<float>(u);
     }
     else if constexpr (
-            std::same_as<Float, double> and
-            std::numeric_limits<double>::is_iec559) {
+        std::same_as<Float, double> and
+        std::numeric_limits<double>::is_iec559) {
         std::uint64_t u = bit_cast<std::uint64_t>(x);
         if (u != (0xfffULL << 52)) { // Not -Inf?
             if (u == 0)              // Ignore +0.0.
@@ -583,7 +581,7 @@ inline Float float_decr(Float x) noexcept {
 
 /// Is relatively tiny? (a much less than b)
 template <std::floating_point Float>
-inline bool relatively_tiny(Float a, Float b) noexcept {
+inline bool is_tiny(Float a, Float b) noexcept {
     volatile Float x = a;
     volatile Float y = b;
     volatile Float z = x + y;
@@ -592,16 +590,21 @@ inline bool relatively_tiny(Float a, Float b) noexcept {
 
 /// Is relatively huge? (a much greater than b)
 template <std::floating_point Float>
-inline bool relatively_huge(Float a, Float b) noexcept {
-    return relatively_tiny(b, a);
+inline bool is_huge(Float a, Float b) noexcept {
+    return is_tiny(b, a);
+}
+
+/// Same signbit?
+template <std::floating_point Float>
+inline bool same_signbit(Float a, Float b) noexcept {
+    return std::signbit(a) == std::signbit(b);
 }
 
 /// Fast inverse square root.
 template <std::floating_point Float>
 [[gnu::always_inline]] inline Float fast_inv_sqrt(Float x) noexcept {
     if constexpr (
-            std::same_as<Float, float> and
-            pre::numeric_limits<float>::is_iec559) {
+        std::same_as<Float, float> and pre::numeric_limits<float>::is_iec559) {
         float y = x;
         float h = y * 0.5f;
         std::uint32_t u = 0;
@@ -741,7 +744,7 @@ inline Float sinpi_min(Float x1, Float x2) noexcept {
         // 2 = min is sinpi(x2)
         // 3 = min is either sinpi(x1) or sinpi(x2)
         constexpr int lookup[4][4] = {
-                {1, 3, 2, 0}, {0, 2, 2, 0}, {0, 0, 2, 0}, {1, 1, 3, 1}};
+            {1, 3, 2, 0}, {0, 2, 2, 0}, {0, 0, 2, 0}, {1, 1, 3, 1}};
         n1 &= 3;
         n2 &= 3;
         switch (lookup[n1][n2]) {
@@ -773,7 +776,7 @@ inline Float sinpi_max(Float x1, Float x2) noexcept {
         // 2 = max is sinpi(x2)
         // 3 = max is either sinpi(x1) or sinpi(x2)
         constexpr int lookup[4][4] = {
-                {2, 0, 0, 0}, {3, 1, 1, 1}, {2, 0, 1, 3}, {2, 0, 0, 2}};
+            {2, 0, 0, 0}, {3, 1, 1, 1}, {2, 0, 1, 3}, {2, 0, 0, 2}};
         n1 &= 3;
         n2 &= 3;
         switch (lookup[n1][n2]) {
@@ -794,7 +797,7 @@ inline auto sincospi(Float x) noexcept {
     int quo;
     Float rem = pre::remquo(x, Float(1), &quo);
     auto [sinx, cosx] =
-            pre::sincos(pre::numeric_constants<Float>::M_pi() * rem);
+        pre::sincos(pre::numeric_constants<Float>::M_pi() * rem);
     if (unsigned(quo) & 1) {
         sinx = -sinx;
         cosx = -cosx;
@@ -835,7 +838,7 @@ inline Float erfinv(Float y) noexcept {
 /// Quadratic roots.
 template <std::floating_point Float>
 inline bool quadratic(
-        Float a, Float b, Float c, Float& x0, Float& x1) noexcept {
+    Float a, Float b, Float c, Float& x0, Float& x1) noexcept {
     if (relatively_tiny(a, b)) {
         x0 = x1 = -c / b;
         return std::isfinite(x0);

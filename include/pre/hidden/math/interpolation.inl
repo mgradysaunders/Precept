@@ -4,14 +4,15 @@
 namespace pre {
 
 /// Linear interpolation.
-///
-/// \param[in] t   Factor.
-/// \param[in] p0  Control point at \f$ t = 0 \f$.
-/// \param[in] p1  Control point at \f$ t = 1 \f$.
-///
-template <std::floating_point Float, typename Control>
+template <typename Float, typename Control>
 constexpr auto lerp(Float t, const Control& p0, const Control& p1) noexcept {
     return (1 - t) * p0 + t * p1;
+}
+
+/// Inverse of linear interpolation.
+template <typename Float, typename Control>
+constexpr auto invlerp(Float y, const Control& p0, const Control& p1) noexcept {
+    return (y - p0) / (p1 - p0);
 }
 
 /// Ease in and out.

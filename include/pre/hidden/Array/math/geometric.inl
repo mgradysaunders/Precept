@@ -310,6 +310,15 @@ constexpr Array<Int, N, N> permutation_matrix(
     return res;
 }
 
+template <size_t N, std::floating_point Float>
+constexpr Array<Float, N> linspace(Float a, Float b) noexcept {
+    Array<Float, N> arr;
+    for (size_t k = 0; k < N; k++)
+        arr[k] = lerp(k / Float(N - 1), a, b);
+    return arr;
+    static_assert(N > 1);
+}
+
 /// Initializers for 2-dimensional floating point arrays.
 ///
 /// \note

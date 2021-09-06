@@ -22,7 +22,7 @@ struct Slice {
 
   private:
     constexpr void do_slice(
-            auto*& first, ssize_t& size, ssize_t& skip) noexcept {
+        auto*& first, ssize_t& size, ssize_t& skip) noexcept {
         if (from < 0)
             from += size + 1;
         if (from > size)
@@ -49,7 +49,7 @@ namespace concepts {
 
 template <typename T>
 concept integral_or_slice =
-        std::integral<std::decay_t<T>> || std::same_as<std::decay_t<T>, Slice>;
+    std::integral<std::decay_t<T>> || std::same_as<std::decay_t<T>, Slice>;
 
 } // namespace concepts
 
@@ -72,7 +72,7 @@ constexpr Slice operator|(Int a, SliceInt b) noexcept {
 template <typename Value, size_t Rank>
 struct ArrayView_initializer_list {
     using type = std::initializer_list<
-            typename ArrayView_initializer_list<Value, Rank - 1>::type>;
+        typename ArrayView_initializer_list<Value, Rank - 1>::type>;
 };
 
 template <typename Value>
@@ -91,12 +91,12 @@ struct ArrayView {
         typedef std::ptrdiff_t difference_type;
 
         typedef std::
-                conditional_t<Rank == 1, Value, ArrayView<Value, Rank - 1>>
-                        value_type;
+            conditional_t<Rank == 1, Value, ArrayView<Value, Rank - 1>>
+                value_type;
 
         typedef std::
-                conditional_t<Rank == 1, Value&, ArrayView<Value, Rank - 1>>
-                        reference;
+            conditional_t<Rank == 1, Value&, ArrayView<Value, Rank - 1>>
+                reference;
 
         typedef std::conditional_t<Rank == 1, Value*, void> pointer;
 
@@ -106,9 +106,7 @@ struct ArrayView {
         constexpr Iterator() noexcept = default;
 
         [[gnu::nonnull]] constexpr Iterator(
-                Value* first,
-                const ssize_t* sizes,
-                const ssize_t* skips) noexcept
+            Value* first, const ssize_t* sizes, const ssize_t* skips) noexcept
             : first_(first), sizes_(sizes), skips_(skips) {
         }
 
@@ -145,7 +143,7 @@ struct ArrayView {
         }
 
         friend constexpr Iterator operator+(
-                difference_type count, Iterator itr) noexcept {
+            difference_type count, Iterator itr) noexcept {
             return itr + count;
         }
 
@@ -198,7 +196,7 @@ struct ArrayView {
     using iterator = Iterator;
 
     using initializer_list =
-            typename ArrayView_initializer_list<Value, Rank>::type;
+        typename ArrayView_initializer_list<Value, Rank>::type;
 
   public:
     constexpr ArrayView() noexcept = default;
@@ -211,14 +209,14 @@ struct ArrayView {
     }
 
     constexpr ArrayView(Value* ptr, ssize_t size0, ssize_t skip0 = 1) noexcept
-            requires(Rank == 1) {
+        requires(Rank == 1) {
         first = ptr;
         sizes[0] = size0;
         skips[0] = skip0;
     }
 
     [[gnu::nonnull]] constexpr ArrayView(
-            Value* ptr, const ssize_t* psizes, const ssize_t* pskips) noexcept
+        Value* ptr, const ssize_t* psizes, const ssize_t* pskips) noexcept
         : first(ptr) {
         std::copy(psizes, psizes + Rank, &sizes[0]);
         std::copy(pskips, pskips + Rank, &skips[0]);
@@ -233,10 +231,20 @@ struct ArrayView {
     }
 
     constexpr ArrayView(
-            Value* ptr,
-            const ArrayIndex<Rank>& sz,
-            const ArrayIndex<Rank>& sk) noexcept
+        Value* ptr,
+        const ArrayIndex<Rank>& sz,
+        const ArrayIndex<Rank>& sk) noexcept
         : first(ptr), sizes(sz), skips(sk) {
+    }
+
+    template <size_t OtherRank>
+    constexpr ArrayView(const ArrayView<Value, OtherRank>& v) noexcept
+        requires(OtherRank <= Rank) {
+        first = v.first;
+        sizes = v.sizes;
+        skips = v.skips;
+        std::fill(&sizes[0] + OtherRank, &sizes[0] + Rank, 1);
+        std::fill(&skips[0] + OtherRank, &skips[0] + Rank, 1);
     }
 
     constexpr ArrayView(const ArrayView&) noexcept = default;
@@ -357,9 +365,9 @@ struct ArrayView {
         else {
             ArrayView<Value, Rank> result = *this;
             Slice(p).do_slice(
-                    result.first,    //
-                    result.sizes[0], //
-                    result.skips[0]);
+                result.first,    //
+                result.sizes[0], //
+                result.skips[0]);
             return result;
         }
     }
@@ -368,8 +376,8 @@ struct ArrayView {
     constexpr decltype(auto) operator()(P p, Q&&... q) noexcept {
         constexpr size_t IndexCount = 1 + sizeof...(Q);
         constexpr size_t SliceCount =
-                (size_t(std::same_as<std::decay_t<P>, Slice>) + ... +
-                 size_t(std::same_as<std::decay_t<Q>, Slice>));
+            (size_t(std::same_as<std::decay_t<P>, Slice>) + ... +
+             size_t(std::same_as<std::decay_t<Q>, Slice>));
         if constexpr (SliceCount == 0) {
             if constexpr (sizeof...(Q) == 0)
                 return operator[](p);
@@ -379,8 +387,8 @@ struct ArrayView {
         else {
             Slice slices[] = {p, std::forward<Q>(q)...};
             constexpr bool is_slice[] = {
-                    not std::integral<std::decay_t<P>>,
-                    not std::integral<std::decay_t<Q>>...};
+                not std::integral<std::decay_t<P>>,
+                not std::integral<std::decay_t<Q>>...};
             ArrayView<Value, Rank - IndexCount + SliceCount> result;
             result.first = first;
             for (size_t dim = 0, off = 0; dim < IndexCount; dim++) {
@@ -388,9 +396,9 @@ struct ArrayView {
                     result.sizes[off] = sizes[dim];
                     result.skips[off] = skips[dim];
                     slices[dim].do_slice(
-                            result.first,      //
-                            result.sizes[off], //
-                            result.skips[off]);
+                        result.first,      //
+                        result.sizes[off], //
+                        result.skips[off]);
                     off++;
                 }
                 else {
@@ -400,11 +408,11 @@ struct ArrayView {
                 }
             }
             std::copy(
-                    sizes.begin() + IndexCount, //
-                    sizes.end(), result.sizes.begin() + SliceCount);
+                sizes.begin() + IndexCount, //
+                sizes.end(), result.sizes.begin() + SliceCount);
             std::copy(
-                    skips.begin() + IndexCount, //
-                    skips.end(), result.skips.begin() + SliceCount);
+                skips.begin() + IndexCount, //
+                skips.end(), result.skips.begin() + SliceCount);
             return result;
         }
     }
@@ -495,12 +503,12 @@ struct ArrayView {
     constexpr ArrayView reorder(Ints... ints) const noexcept {
         static_assert(sizeof...(Ints) == Rank);
         ArrayView result{
-                first,                  //
-                sizes.swizzle(ints...), //
-                skips.swizzle(ints...)};
+            first,                  //
+            sizes.swizzle(ints...), //
+            skips.swizzle(ints...)};
         ASSERT(std::is_permutation(
-                result.skips.begin(), //
-                result.skips.end(), skips.begin()));
+            result.skips.begin(), //
+            result.skips.end(), skips.begin()));
         return result;
     }
 
@@ -559,19 +567,19 @@ struct ArrayView {
     }
 
     constexpr void swap_rows(ssize_t k0, ssize_t k1) noexcept
-            requires(Rank == 2) {
+        requires(Rank == 2) {
         if (k0 != k1)
             row(k0).swap_each(row(k1));
     }
 
     constexpr void swap_cols(ssize_t k0, ssize_t k1) noexcept
-            requires(Rank == 2) {
+        requires(Rank == 2) {
         if (k0 != k1)
             col(k0).swap_each(col(k1));
     }
 
     constexpr ArrayView<Value, 1> diag(ssize_t p = 0) noexcept
-            requires(Rank == 2) {
+        requires(Rank == 2) {
         ssize_t size0 = sizes[0], size1 = sizes[1];
         ssize_t skip0 = skips[0], skip1 = skips[1];
         if (!(first && p > -size0 && p < +size1))
@@ -596,7 +604,7 @@ struct ArrayView {
     }
 
     constexpr ArrayView transpose(ssize_t k0, ssize_t k1) noexcept
-            requires(Rank > 2) {
+        requires(Rank > 2) {
         ArrayView result = *this;
         std::swap(result.sizes[k0], result.sizes[k1]);
         std::swap(result.skips[k0], result.skips[k1]);
@@ -686,7 +694,7 @@ ArrayView(Range&) -> ArrayView<std::ranges::range_value_t<Range>, 1>;
 
 template <std::ranges::random_access_range Range>
 ArrayView(const Range&)
-        -> ArrayView<const std::ranges::range_value_t<Range>, 1>;
+    -> ArrayView<const std::ranges::range_value_t<Range>, 1>;
 
 } // namespace pre
 
