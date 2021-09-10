@@ -55,7 +55,7 @@ struct ImageSampler {
 
     using ImageView = ArrayView<Data, Rank + 1>;
 
-    using ImageWrap = Array<Image::Wrap, Rank>;
+    using ImageWrap = Array<Wrap, Rank>;
 
   public:
     constexpr ImageSampler() noexcept = default;
@@ -74,6 +74,22 @@ struct ImageSampler {
             pixel.end(), data(do_wrap(coord)));
     }
 
+    constexpr Data* data(Coord<int> coord) noexcept {
+        return &view[ArrayIndex<Rank + 1>(coord)];
+    }
+
+    constexpr const Data* data(Coord<int> coord) const noexcept {
+        return &view[ArrayIndex<Rank + 1>(coord)];
+    }
+
+    constexpr auto operator[](int k) noexcept requires(Rank > 1) {
+        ImageSampler<Data, Rank - 1, Channels> result;
+        result.view = view[do_wrap<0>(k)];
+        result.wrap = *wrap(Slice(1, Rank));
+        return result;
+    }
+
+  public:
     constexpr Pixel linear(Coord<Float> coord) noexcept {
         int i = 0;
         Float u = fract(coord[0], &i);
@@ -110,7 +126,8 @@ struct ImageSampler {
         }
     }
 
-    static constexpr std::pair<Pixel, Pixel> monocubic_slopes(
+  public:
+    static constexpr auto monocubic_slopes(
         const Pixel& fm,
         const Pixel& f0,
         const Pixel& f1,
@@ -124,7 +141,7 @@ struct ImageSampler {
             if (df[k] == 0 or not same_signbit(m1[k], df[k]))
                 m1[k] = 0;
         }
-        return {m0, m1};
+        return std::make_pair(m0, m1);
     }
 
     constexpr Pixel monocubic(Coord<Float> coord) noexcept {
@@ -192,6 +209,7 @@ struct ImageSampler {
         }
     }
 
+  public:
     template <std::invocable<Float> Func>
     constexpr Pixel filter(
         Coord<Float> coord, //
@@ -246,21 +264,6 @@ struct ImageSampler {
         }
     }
 
-    constexpr Data* data(Coord<int> coord) noexcept {
-        return &view[ArrayIndex<Rank + 1>(coord)];
-    }
-
-    constexpr const Data* data(Coord<int> coord) const noexcept {
-        return &view[ArrayIndex<Rank + 1>(coord)];
-    }
-
-    constexpr auto operator[](int k) noexcept requires(Rank > 1) {
-        ImageSampler<Data, Rank - 1, Channels> result;
-        result.view = view[do_wrap<0>(k)];
-        result.wrap = *wrap(Slice(1, Rank));
-        return result;
-    }
-
   public:
     ImageView view = {};
 
@@ -271,12 +274,12 @@ struct ImageSampler {
         int n = view.sizes[Dim];
         switch (wrap[Dim]) {
         default: break;
-        case Image::Wrap::Clamp:
+        case Wrap::Clamp:
             k = max(k, 0);
             k = min(k, n - 1);
             break;
-        case Image::Wrap::Repeat: k = repeat(k, n); break;
-        case Image::Wrap::Mirror: k = mirror(k, n); break;
+        case Wrap::Repeat: k = repeat(k, n); break;
+        case Wrap::Mirror: k = mirror(k, n); break;
         }
         return k;
     }
@@ -286,12 +289,12 @@ struct ImageSampler {
             int n = view.sizes[r];
             switch (wrap[r]) {
             default: break;
-            case Image::Wrap::Clamp:
+            case Wrap::Clamp:
                 k[r] = max(k[r], 0);
                 k[r] = min(k[r], n - 1);
                 break;
-            case Image::Wrap::Repeat: k[r] = repeat(k[r], n); break;
-            case Image::Wrap::Mirror: k[r] = mirror(k[r], n); break;
+            case Wrap::Repeat: k[r] = repeat(k[r], n); break;
+            case Wrap::Mirror: k[r] = mirror(k[r], n); break;
             }
         }
         return k;

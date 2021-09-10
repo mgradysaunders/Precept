@@ -89,6 +89,41 @@ class ImmutableKdTree {
     }
 
   public:
+    /// Visit all nodes in box.
+    template <std::invocable<const Node&> Visitor>
+    void visit(const Box& box, Visitor&& visitor) {
+        GrowableStack<const Node*> todo;
+        if (nodes.size())
+            todo.push(&nodes[0]);
+        while (not todo.empty()) {
+            const Node* node = todo.pop();
+            if (not std::invoke(std::forward<Visitor>(visitor), *node))
+                return;
+            int axis = node->axis;
+            const Node* child0 = node + node->left;
+            const Node* child1 = node + node->right;
+            if (child0 != node and node->point[axis] > box.min(axis))
+                todo.push(child0);
+            if (child1 != node and node->point[axis] < box.max(axis))
+                todo.push(child1);
+        }
+    }
+
+    /// Visit all nodes in sphere.
+    template <std::invocable<const Node&> Visitor>
+    void visit(const Point& center, float radius, Visitor&& visitor) {
+        float radius2 = radius * radius;
+        Point min_point = center - Point(std::abs(radius));
+        Point max_point = center + Point(std::abs(radius));
+        visit(Box(min_point, max_point), [&](const Node& node) {
+            if (distance2(node.point, center) < radius2 and
+                not std::invoke(std::forward<Visitor>(visitor), node))
+                return false;
+            return true;
+        });
+    }
+
+  public:
     Nodes nodes;
 
     void serialize(auto& serializer) {

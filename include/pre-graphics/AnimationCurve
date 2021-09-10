@@ -32,6 +32,7 @@
 #define PRE_GRAPHICS_ANIMATION_CURVE
 
 #include <pre/math>
+#include <pre-graphics/Wrap>
 
 namespace pre {
 
@@ -44,11 +45,6 @@ namespace pre {
 ///
 class AnimationCurve {
   public:
-    enum class Wrap {
-        Clamp,  ///< Clamp to end value.
-        Repeat, ///< Repeat forever.
-        Mirror  ///< Repeat forever, mirroring every other cycle.
-    };
     Wrap wrap_mode_before = Wrap::Clamp;
     Wrap wrap_mode_after = Wrap::Clamp;
 

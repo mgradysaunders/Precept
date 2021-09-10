@@ -36,6 +36,7 @@
 #include <pre/Half>
 #include <pre/math>
 #include <pre-graphics/Color>
+#include <pre-graphics/Wrap>
 
 namespace pre {
 
@@ -78,13 +79,6 @@ class Image {
     };
 
     static_assert(sizeof(float) == 4 and sizeof(double) == 8);
-
-    /// Wrap mode.
-    enum class Wrap {
-        Clamp = 0, ///< Clamp to edge
-        Repeat,    ///< Repeat forever
-        Mirror     ///< Repeat forever, mirroring each time
-    };
 
   public:
     Image() = default;
