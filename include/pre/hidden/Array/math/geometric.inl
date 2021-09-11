@@ -278,7 +278,7 @@ inline auto inverse(const Array<Arith, N, N>& arr) noexcept {
                 return x;
             }
             catch (const std::runtime_error&) {
-                return Array<Field, N, N>(numeric_limits<Float>::quiet_NaN());
+                return Array<Field, N, N>(NaN<Float>);
             }
         }
     }
@@ -328,7 +328,7 @@ template <std::floating_point Float>
 struct Array_initializers<Array<Float, 2>> {
     /// Uniform disk probability density function.
     static constexpr Float uniform_disk_pdf() noexcept {
-        return numeric_constants<Float>::M_1_pi();
+        return M_1_pi<Float>;
     }
 
     /// Uniform disk probability density function sampling routine.
@@ -342,18 +342,19 @@ struct Array_initializers<Array<Float, 2>> {
             Float theta;
             if (pre::abs(u[0]) > pre::abs(u[1])) {
                 r = u[0];
-                theta = numeric_constants<Float>::M_pi_4() * (u[1] / u[0]);
+                theta = M_pi_4<Float> * (u[1] / u[0]);
             }
             else {
                 r = u[1];
-                theta = numeric_constants<Float>::M_pi_4() * (u[0] / u[1]);
-                theta = numeric_constants<Float>::M_pi_2() - theta;
+                theta = M_pi_4<Float> * (u[0] / u[1]);
+                theta = M_pi_2<Float> - theta;
             }
             return {r * pre::cos(theta), r * pre::sin(theta)};
         }
     }
 };
 
+// TODO Move this
 /// Initializers for 3-dimensional floating point arrays.
 ///
 /// \note
@@ -365,35 +366,34 @@ struct Array_initializers<Array<Float, 3>> {
     /// Form spherical direction from z-component and azimuth angle.
     static Vec3<Float> sphericalz(Float z, Float phi) noexcept {
         Float cos_theta = clamp_abs(z, +1);
-        Float sin_theta = pre::sqrt(1 - pre::min(z * z, Float(1)));
-        auto [sin_phi, cos_phi] = pre::sincos(phi);
+        Float sin_theta = pre::sqrt(1 - z * z);
+        auto [sin_phi, cos_phi] = sincos(phi);
         return {sin_theta * cos_phi, sin_theta * sin_phi, cos_theta};
     }
 
     /// Uniform hemisphere probability density function.
     static constexpr Float uniform_hemisphere_pdf() noexcept {
-        return numeric_constants<Float>::M_1_pi() / 2;
+        return M_1_pi<Float> / 2;
     }
 
     /// Uniform hemisphere probability density function sampling routine.
     static Vec3<Float> uniform_hemisphere_pdf_sample(Vec2<Float> u) noexcept {
-        return sphericalz(u[0], 2 * numeric_constants<Float>::M_pi() * u[1]);
+        return sphericalz(u[0], 2 * M_pi<Float> * u[1]);
     }
 
     /// Uniform sphere probability density function.
     static constexpr Float uniform_sphere_pdf() noexcept {
-        return numeric_constants<Float>::M_1_pi() / 4;
+        return M_1_pi<Float> / 4;
     }
 
     /// Uniform sphere probability density function sampling routine.
     static Vec3<Float> uniform_sphere_pdf_sample(Vec2<Float> u) noexcept {
-        return sphericalz(
-            2 * u[0] - 1, 2 * numeric_constants<Float>::M_pi() * u[1]);
+        return sphericalz(2 * u[0] - 1, 2 * M_pi<Float> * u[1]);
     }
 
     /// Cosine hemisphere probability density function.
     static constexpr Float cosine_hemisphere_pdf(Float z) noexcept {
-        return numeric_constants<Float>::M_1_pi() * pre::max(z, 0);
+        return M_1_pi<Float> * pre::max(z, 0);
     }
 
     /// Cosine hemisphere probability density function sampling routine.
@@ -405,18 +405,15 @@ struct Array_initializers<Array<Float, 3>> {
 
     /// Uniform cone probability density function.
     static constexpr Float uniform_cone_pdf(Float zmax) noexcept {
-        return (numeric_constants<Float>::M_1_pi() / 2) / (1 - zmax);
+        return (M_1_pi<Float> / 2) / (1 - zmax);
     }
 
     /// Uniform cone probability density function sampling routine.
     static Vec3<Float> uniform_cone_pdf_sample(
         Float zmax, Vec2<Float> u) noexcept {
-        return sphericalz(
-            (1 - u[0]) + u[0] * zmax,
-            2 * numeric_constants<Float>::M_pi() * u[1]);
+        return sphericalz((1 - u[0]) + u[0] * zmax, 2 * M_pi<Float> * u[1]);
     }
 
-    // TODO move
     /// Henyey-Greenstein phase probability density function.
     static Float hg_phase_pdf(Float g, Float z) noexcept {
         if (pre::abs(g) < Float(0.00001)) {
@@ -426,12 +423,10 @@ struct Array_initializers<Array<Float, 3>> {
             g = clamp_abs(g, 0.99999);
             Float a = 1 - g * g;
             Float b = 1 + g * g - 2 * g * z;
-            Float b3_2 = pre::sqrt(b * b * b);
-            return (numeric_constants<Float>::M_1_pi() / 4) * (a / b3_2);
+            return (M_1_pi<Float> / 4) * (a / (b * pre::sqrt(b)));
         }
     }
 
-    // TODO move
     /// Henyey-Greenstein phase probability density function sampling routine.
     static Vec3<Float> hg_phase_pdf_sample(Float g, Vec2<Float> u) noexcept {
         if (pre::abs(g) < Float(0.00001)) {
@@ -441,7 +436,7 @@ struct Array_initializers<Array<Float, 3>> {
             g = clamp_abs(g, 0.99999);
             Float h = (1 - g * g) / (1 - g + 2 * g * u[0]);
             Float z = (1 + g * g - h * h) / (2 * g);
-            return sphericalz(z, 2 * numeric_constants<Float>::M_pi() * u[1]);
+            return sphericalz(z, 2 * M_pi<Float> * u[1]);
         }
     }
 };
@@ -455,10 +450,10 @@ template <std::floating_point Float>
 struct Array_initializers<Array<Float, 2, 2>> {
     /// Rotate counter-clockwise.
     static Mat2<Float> rotate(Float theta) noexcept {
-        auto [sin_theta, cos_theta] = pre::sincos(theta);
+        auto [sin_theta, cos_theta] = sincos(theta);
         return {
-            +cos_theta, -sin_theta, //
-            +sin_theta, +cos_theta};
+            {+cos_theta, -sin_theta}, //
+            {+sin_theta, +cos_theta}};
     }
 };
 
@@ -507,9 +502,10 @@ struct Array_initializers<Array<Float, 3, 3>> {
                     haty - dot(haty, hatx) * hatx - dot(haty, hatz) * hatz);
             }
         }
-        return {hatx[0], haty[0], hatz[0], //
-                hatx[1], haty[1], hatz[1], //
-                hatx[2], haty[2], hatz[2]};
+        return {
+            {hatx[0], haty[0], hatz[0]}, //
+            {hatx[1], haty[1], hatz[1]}, //
+            {hatx[2], haty[2], hatz[2]}};
     }
 
     /// Rotate counter-clockwise around arbitrary axis.
@@ -533,7 +529,7 @@ struct Array_initializers<Array<Float, 3, 3>> {
     /// \f]
     ///
     static Mat3<Float> rotate(Float theta, Vec3<Float> hatv) noexcept {
-        auto [sin_theta, cos_theta] = pre::sincos(theta);
+        auto [sin_theta, cos_theta] = sincos(theta);
         Float vx = hatv[0];
         Float vy = hatv[1];
         Float vz = hatv[2];
@@ -541,15 +537,15 @@ struct Array_initializers<Array<Float, 3, 3>> {
         Float vyvy = vy * vy, vyvz = vy * vz;
         Float vzvz = vz * vz;
         return {
-            vxvx * (1 - cos_theta) + cos_theta,
-            vxvy * (1 - cos_theta) - vz * sin_theta,
-            vxvz * (1 - cos_theta) + vy * sin_theta, //
-            vxvy * (1 - cos_theta) + vz * sin_theta,
-            vyvy * (1 - cos_theta) + cos_theta,
-            vyvz * (1 - cos_theta) - vx * sin_theta, //
-            vxvz * (1 - cos_theta) - vy * sin_theta,
-            vyvz * (1 - cos_theta) + vx * sin_theta,
-            vzvz * (1 - cos_theta) + cos_theta};
+            {vxvx * (1 - cos_theta) + cos_theta,
+             vxvy * (1 - cos_theta) - vz * sin_theta,
+             vxvz * (1 - cos_theta) + vy * sin_theta}, //
+            {vxvy * (1 - cos_theta) + vz * sin_theta,
+             vyvy * (1 - cos_theta) + cos_theta,
+             vyvz * (1 - cos_theta) - vx * sin_theta}, //
+            {vxvz * (1 - cos_theta) - vy * sin_theta,
+             vyvz * (1 - cos_theta) + vx * sin_theta,
+             vzvz * (1 - cos_theta) + cos_theta}};
     }
 
     /// Rotate counter-clockwise around X-axis.
@@ -569,7 +565,7 @@ struct Array_initializers<Array<Float, 3, 3>> {
 
     /// Uniform scale.
     static Mat3<Float> scale(Float alpha) noexcept {
-        return {alpha, 0, 0, 0, alpha, 0, 0, 0, alpha};
+        return {{alpha, 0, 0}, {0, alpha, 0}, {0, 0, alpha}};
     }
 
     /// Non-uniform scale along arbitrary axis.
@@ -581,7 +577,10 @@ struct Array_initializers<Array<Float, 3, 3>> {
 
     /// Non-uniform axis-aligned scale.
     static Mat3<Float> scale(Vec3<Float> alpha) noexcept {
-        return {alpha[0], 0, 0, alpha[1], 0, 0, alpha[2]};
+        return {
+            {alpha[0], 0, 0}, //
+            {0, alpha[1], 0}, //
+            {0, 0, alpha[2]}};
     }
 };
 
@@ -594,10 +593,11 @@ template <std::floating_point Float>
 struct Array_initializers<Array<Float, 4, 4>> {
     /// Translate.
     static Mat4<Float> translate(Vec3<Float> v) noexcept {
-        return {1, 0, 0, v[0], //
-                0, 1, 0, v[1], //
-                0, 0, 1, v[2], //
-                0, 0, 0, 1};
+        return {
+            {1, 0, 0, v[0]}, //
+            {0, 1, 0, v[1]}, //
+            {0, 0, 1, v[2]}, //
+            {0, 0, 0, 1}};
     }
 
     /// Rotate counter-clockwise around arbitrary axis.
@@ -660,10 +660,11 @@ struct Array_initializers<Array<Float, 4, 4>> {
         Vec3<Float> hatz = normalize(z);
         Vec3<Float> hatx = normalize(x);
         Vec3<Float> haty = cross(hatz, hatx);
-        return {hatx[0], hatx[1], hatx[2], -dot(hatx, pfrom), //
-                haty[0], haty[1], haty[2], -dot(haty, pfrom), //
-                hatz[0], hatz[1], hatz[2], -dot(hatz, pfrom), //
-                0,       0,       0,       1};
+        return {
+            {hatx[0], hatx[1], hatx[2], -dot(hatx, pfrom)},
+            {haty[0], haty[1], haty[2], -dot(haty, pfrom)},
+            {hatz[0], hatz[1], hatz[2], -dot(hatz, pfrom)},
+            {0, 0, 0, 1}};
     }
 
     /// Orthographic projection.

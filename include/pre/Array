@@ -156,9 +156,16 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     }
 
     constexpr Array(std::initializer_list<Array<Entry, N...>> list) noexcept
-            requires(Rank > 1) {
+        requires(Rank > 1) {
         ASSERT(M == list.size());
         std::copy(list.begin(), list.end(), begin());
+    }
+
+    constexpr Array(
+        typename ArrayView_initializer_list<Entry, Rank>::type list) noexcept
+        requires(Rank > 1) {
+        ASSERT(M == list.size());
+        view() = list;
     }
 
     template <typename Func>
@@ -390,7 +397,7 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     /// Reshape.
     template <size_t... K>
     constexpr Array<Entry, K...> reshape() const
-            requires((M * ... * N) == (K * ... * 1)) {
+        requires((M * ... * N) == (K * ... * 1)) {
         Array<Entry, K...> res;
         std::copy(data(), data() + (M * ... * N), res.data());
         return res;
@@ -431,7 +438,7 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     /// Swizzle.
     template <std::integral Index, size_t K>
     constexpr Array<Entry, K, N...> swizzle(
-            const Array<Index, K>& k) const noexcept {
+        const Array<Index, K>& k) const noexcept {
         Array<Entry, K, N...> res;
         auto itrres = res.begin();
         auto itrk = k.begin();
@@ -443,7 +450,7 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     /// Swizzle.
     template <std::integral Index, std::integral... Indexes>
     constexpr Array<Entry, 1 + sizeof...(Indexes), N...> swizzle(
-            Index p, Indexes... q) const noexcept {
+        Index p, Indexes... q) const noexcept {
         return swizzle(Array<Index, 1 + sizeof...(Indexes)>{p, q...});
     }
 
@@ -455,9 +462,8 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     constexpr value_type foldl(F&& func) const {
         auto itr = begin();
         auto val = *itr++;
-        while (itr < end()) {
+        while (itr < end())
             val = std::invoke(func, val, *itr++);
-        }
         return val;
     }
 
@@ -465,9 +471,8 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     constexpr value_type foldr(F&& func) const {
         auto itr = rbegin();
         auto val = *itr++;
-        while (itr < rend()) {
+        while (itr < rend())
             val = std::invoke(func, val, *itr++);
-        }
         return val;
     }
 
@@ -475,9 +480,8 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     constexpr Array& foldl_accum(F&& func) {
         auto itr1 = begin();
         auto itr2 = begin() + 1;
-        for (; itr2 < end(); ++itr1, ++itr2) {
+        for (; itr2 < end(); ++itr1, ++itr2)
             *itr2 = std::invoke(func, *itr2, *itr1);
-        }
         return *this;
     }
 
@@ -485,9 +489,8 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     constexpr Array& foldr_accum(F&& func) {
         auto itr1 = rbegin();
         auto itr2 = rbegin() + 1;
-        for (; itr2 < rend(); ++itr1, ++itr2) {
+        for (; itr2 < rend(); ++itr1, ++itr2)
             *itr2 = std::invoke(func, *itr2, *itr1);
-        }
         return *this;
     }
 
@@ -495,9 +498,8 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     constexpr Array& foldl_adjacent(F&& func) {
         auto itr1 = begin();
         auto itr2 = begin() + 1;
-        for (; itr2 < end(); ++itr1, ++itr2) {
+        for (; itr2 < end(); ++itr1, ++itr2)
             *itr1 = std::invoke(func, *itr1, *itr2);
-        }
         return *this;
     }
 
@@ -505,9 +507,8 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     constexpr Array& foldr_adjacent(F&& func) {
         auto itr1 = rbegin();
         auto itr2 = rbegin() + 1;
-        for (; itr2 < rend(); ++itr1, ++itr2) {
+        for (; itr2 < rend(); ++itr1, ++itr2)
             *itr1 = std::invoke(func, *itr1, *itr2);
-        }
         return *this;
     }
 
@@ -602,31 +603,37 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
     }
 
     constexpr Array<int, M> sorted_indexes() const noexcept
-            requires(Rank == 1) {
+        requires(Rank == 1) {
         Array<std::pair<Entry, int>, M> pairs;
         for (size_t k = 0; k < M; k++) {
             pairs[k].first = operator[](k);
             pairs[k].second = k;
         }
         std::sort(
-                pairs.begin(), pairs.end(),
-                [](const std::pair<Entry, int>& lhs,
-                   const std::pair<Entry, int>& rhs) {
-                    return lhs.first < rhs.first;
-                });
+            pairs.begin(), pairs.end(),
+            [](const std::pair<Entry, int>& lhs,
+               const std::pair<Entry, int>& rhs) {
+                return lhs.first < rhs.first;
+            });
         Array<int, M> indexes;
         for (size_t k = 0; k < M; k++)
             indexes[k] = pairs[k].second;
         return indexes;
     }
 
+    static constexpr Array axis(ssize_t n) noexcept requires(Rank == 1) {
+        Array array;
+        array[n] = Entry(1);
+        return array;
+    }
+
     static constexpr Array identity() noexcept requires(Rank == 2) {
         ssize_t ssizes[] = {M, N...};
-        Array arr;
+        Array array;
         for (ssize_t i = 0; i < ssizes[0]; i++)
             for (ssize_t j = 0; j < ssizes[1]; j++)
-                arr(i, j) = Entry(i == j ? 1 : 0);
-        return arr;
+                array(i, j) = Entry(i == j ? 1 : 0);
+        return array;
     }
 
     /** \} */
@@ -664,13 +671,13 @@ struct Array<Entry, M, N...> : Array_initializers<Array<Entry, M, N...>> {
 
 template <concepts::not_array T, concepts::not_array... U>
 Array(const T&, const U&...)
-        -> Array<std::common_type_t<T, U...>, 1 + sizeof...(U)>;
+    -> Array<std::common_type_t<T, U...>, 1 + sizeof...(U)>;
 
 template <concepts::not_array T, concepts::array... U, size_t... N>
 Array(const Array<T, N...>&, const U&...) -> Array<
-        std::common_type_t<T, typename U::entry_type...>,
-        1 + sizeof...(U),
-        N...>;
+    std::common_type_t<T, typename U::entry_type...>,
+    1 + sizeof...(U),
+    N...>;
 
 template <typename T, typename U, size_t M>
 constexpr auto dot(const Array<T, M>& lhs, const Array<U, M>& rhs) noexcept {
@@ -679,7 +686,7 @@ constexpr auto dot(const Array<T, M>& lhs, const Array<U, M>& rhs) noexcept {
 
 template <typename T, typename U, size_t M, size_t N, size_t P>
 constexpr auto dot(
-        const Array<T, M, N>& lhs, const Array<U, N, P>& rhs) noexcept {
+    const Array<T, M, N>& lhs, const Array<U, N, P>& rhs) noexcept {
     Array<decltype(T() * U()), M, P> res = {};
     for (size_t i = 0; i < M; i++)
         for (size_t j = 0; j < P; j++)
@@ -690,13 +697,13 @@ constexpr auto dot(
 
 template <typename T, typename U, size_t M, size_t N>
 constexpr auto dot(
-        const Array<T, M, N>& lhs, const Array<U, N>& rhs) noexcept {
+    const Array<T, M, N>& lhs, const Array<U, N>& rhs) noexcept {
     return dot(lhs, rhs.template reshape<N, 1>()).template reshape<M>();
 }
 
 template <typename T, typename U, size_t N, size_t P>
 constexpr auto dot(
-        const Array<T, N>& lhs, const Array<U, N, P>& rhs) noexcept {
+    const Array<T, N>& lhs, const Array<U, N, P>& rhs) noexcept {
     return dot(lhs.template reshape<1, N>(), rhs).template reshape<P>();
 }
 
@@ -707,7 +714,7 @@ constexpr auto dot(const T& lhs, const U& rhs, const Args&... args) {
 
 template <typename T, typename U, size_t M, size_t N>
 constexpr Array<T, M, N> outer(
-        const Array<T, M>& lhs, const Array<U, N>& rhs) noexcept {
+    const Array<T, M>& lhs, const Array<U, N>& rhs) noexcept {
     return dot(lhs.template reshape<M, 1>(), rhs.template reshape<1, N>());
 }
 

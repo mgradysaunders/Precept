@@ -60,14 +60,14 @@ struct numeric_constants<Float> {
         return Float(0.6366197723675813430755350534900574L);
     }
 
-    /// \f$ 2/\sqrt{\pi} \f$.
-    static consteval Float M_2_sqrtpi() noexcept {
-        return Float(1.1283791670955125738961589031215452L);
-    }
-
     /// \f$ 1/\sqrt{\pi} \f$.
     static consteval Float M_1_sqrtpi() noexcept {
         return Float(1.1283791670955125738961589031215452L) * Float(0.5);
+    }
+
+    /// \f$ 2/\sqrt{\pi} \f$.
+    static consteval Float M_2_sqrtpi() noexcept {
+        return Float(1.1283791670955125738961589031215452L);
     }
 
     /// \f$ \sqrt{2} \f$.
@@ -113,6 +113,33 @@ struct numeric_constants<Float> {
         return Float(299792458);
     }
 };
+
+template <std::floating_point Float>
+constexpr Float M_pi = numeric_constants<Float>::M_pi();
+
+template <std::floating_point Float>
+constexpr Float M_pi_2 = numeric_constants<Float>::M_pi_2();
+
+template <std::floating_point Float>
+constexpr Float M_pi_4 = numeric_constants<Float>::M_pi_4();
+
+template <std::floating_point Float>
+constexpr Float M_1_pi = numeric_constants<Float>::M_1_pi();
+
+template <std::floating_point Float>
+constexpr Float M_2_pi = numeric_constants<Float>::M_2_pi();
+
+template <std::floating_point Float>
+constexpr Float M_1_sqrtpi = numeric_constants<Float>::M_1_sqrtpi();
+
+template <std::floating_point Float>
+constexpr Float M_2_sqrtpi = numeric_constants<Float>::M_2_sqrtpi();
+
+template <std::floating_point Float>
+constexpr Float M_sqrt2 = numeric_constants<Float>::M_sqrt2();
+
+template <std::floating_point Float>
+constexpr Float M_sqrt1_2 = numeric_constants<Float>::M_sqrt1_2();
 
 /// Numeric constants, `std::complex` specialization.
 template <std::floating_point Float>

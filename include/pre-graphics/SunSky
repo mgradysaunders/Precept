@@ -37,8 +37,88 @@
 namespace pre {
 
 struct SunSky {
+
+    /// Sun direction.
     static Vec3<double> sun_direction(
         double lat, double lon, double day) noexcept;
+
+    struct DawnDusk {
+        double dawn = 0;
+        double dusk = 0;
+        double day_length() const noexcept {
+            return dusk - dawn;
+        }
+    };
+
+    /// Sun dawn and dusk times as fractional offsets.
+    static DawnDusk sun_dawn_dusk(double lat, double lon, int day) noexcept;
+
+#if 0
+    /// Avagadro constant (1/mol).
+    static constexpr double avagadro = 6.02214076e+23;
+
+    /// Gas constant in (J/C/mol).
+    static constexpr double gas_constant = avagadro * 1.380649e-23;
+
+    /// Acceleration due to gravity (m/s/s).
+    static constexpr double gravity = 9.80665;
+
+    struct Air {
+        /// Molar mass (g/mol).
+        static constexpr double molar_mass(double q) noexcept {
+            return (1 - q) * 28.9647 + q * 18.01528;
+        }
+
+        /// Specific heat capacity (J/g/C).
+        static constexpr double specific_heat_capacity(double q) noexcept {
+            return 1.0035 + 1.82 * q;
+        }
+
+        /// Specific heat capacity ratio.
+        static constexpr double specific_heat_ratio(double q) noexcept {
+            double cp = specific_heat_capacity(q);
+            return cp / (cp - gas_constant / molar_mass(q));
+        }
+
+#if 0
+        /// Temperature lapse rate (C/km).
+        static constexpr double temperature_lapse_rate(double h) noexcept {
+            return -gravity / specific_heat_capacity(h);
+        }
+
+        /// Air pressure (Pa).
+        ///
+        /// \param[in] h  Specific humidity.
+        /// \param[in] t  Temperature at sea level (C).
+        /// \param[in] z  Altitude above sea level (km).
+        ///
+        static constexpr double pressure(
+            double h, double t, double z) noexcept {
+            t += 273.15;
+            double l = temperature_lapse_rate(h);
+            double m = molar_mass(h) / gas_constant;
+            return 101235.0 * std::pow(1 + l / t * z, -gravity * m / l);
+        }
+#endif
+
+        /// Saturation pressure (Pa).
+        static double saturation_pressure(double t) noexcept {
+            double a0 = 3.4494e1;
+            double a1 = 4.92499e3;
+            double a2 = 2.371e2;
+            double a3 = 1.05e2;
+            double a4 = 1.57;
+            if (t < 0) {
+                a0 = 4.3494e1;
+                a1 = 6.5458e3;
+                a2 = 2.78e2;
+                a3 = 8.68e2;
+                a4 = 2;
+            }
+            return std::exp(a0 - a1 / (t + a2)) / std::pow(t + a3, a4);
+        }
+    };
+#endif
 };
 
 } // namespace pre

@@ -47,30 +47,42 @@ struct Quadric {
   public:
     constexpr Quadric() noexcept = default;
 
-    constexpr void set_ellipsoid(Float radius) noexcept {
-        q = {}, q->diag() = 1 / (radius * radius);
-        r = {};
-        s = -1;
+    constexpr Float field(Point x) const noexcept {
+        return dot(x, coeffq, x) + dot(coeffr, x) + coeffs;
     }
 
-    constexpr void set_ellipsoid(Vec radius) noexcept {
-        q = {}, q->diag() = **(1 / (radius * radius));
-        r = {};
-        s = -1;
-    }
-
-    constexpr Float field(Point p) const noexcept {
-        return dot(p, q, p) + dot(r, p) + s;
-    }
-
-    constexpr Vec field_gradient(Point p) const noexcept {
-        return dot(p, q + transpose(q)) + r;
+    constexpr Vec field_gradient(Point x) const noexcept {
+        return dot(x, coeffq + transpose(coeffq)) + coeffr;
     }
 
   public:
-    Mat q = Mat::identity();
-    Vec r = {};
-    Float s = -1;
+    constexpr void set_ellipsoid(Vec r) noexcept {
+        coeffq = Mat(), coeffq->diag() = **(1 / (r * r));
+        coeffr = Vec();
+        coeffs = -1;
+    }
+
+    constexpr void set_cylinder(Array<Float, 2> r) noexcept
+        requires(Dim == 3) {
+        coeffq = Mat();
+        coeffq(0, 0) = 1 / (r[0] * r[0]);
+        coeffq(1, 1) = 1 / (r[1] * r[1]);
+        coeffq(2, 2) = 0;
+        coeffr = Vec();
+        coeffs = -1;
+    }
+
+    constexpr void set_cone(Vec r) noexcept requires(Dim == 3) {
+        coeffq = Mat(), coeffq->diag() = **(1 / (r * r));
+        coeffr = Vec();
+        coeffs = 0;
+        coeffq(2, 2) *= -1;
+    }
+
+  public:
+    Mat coeffq = Mat::identity();
+    Vec coeffr = Vec();
+    Float coeffs = -1;
 };
 
 template <std::floating_point Float = float>
@@ -91,13 +103,13 @@ struct RayTest<Quadric<Float, Dim>> {
     bool operator()(const Quadric<Float, Dim>& quadric, HitType* hit = nullptr)
         const noexcept {
         using BigFloat = std::common_type_t<Float, double>;
-        Array<BigFloat, Dim, Dim> q = quadric.q;
-        Array<BigFloat, Dim> r = quadric.r;
+        Array<BigFloat, Dim, Dim> q = quadric.coeffq;
+        Array<BigFloat, Dim> r = quadric.coeffr;
         Array<BigFloat, Dim> o = ray->org;
         Array<BigFloat, Dim> d = ray->dir;
         BigFloat a = dot(d, q, d);
         BigFloat b = dot(d, q, o) * 2 + dot(r, d);
-        BigFloat c = dot(o, q, o) + dot(r, o) + quadric.s;
+        BigFloat c = dot(o, q, o) + dot(r, o) + quadric.coeffs;
         BigFloat t0 = NaN<BigFloat>;
         BigFloat t1 = NaN<BigFloat>;
         BigFloat t;
@@ -122,6 +134,93 @@ struct RayTest<Quadric<Float, Dim>> {
   public:
     const RayType* ray = nullptr;
 };
+
+/// Convert to and from cylindrical coordinates.
+///
+/// - \f$ \mathbf{x} = (x, y, z) \f$
+/// - \f$ \mathbf{q} = (\rho, \phi, z) \f$
+///
+namespace CylCoords {
+
+template <std::floating_point Float>
+inline Array<Float, 3> decode(const Array<Float, 3>& q) noexcept {
+    return {
+        q[0] * std::cos(q[1]), //
+        q[0] * std::sin(q[1]), //
+        q[2]};
+}
+
+template <std::floating_point Float>
+inline Array<Float, 3> encode(const Array<Float, 3>& x) noexcept {
+    return {std::hypot(x[0], x[1]), std::atan2(x[1], x[0]), x[2]};
+}
+
+template <std::floating_point Float>
+inline Array<Float, 3, 3> decode_jacobian(const Array<Float, 3>& q) noexcept {
+    auto [s1, c1] = sincos(q[1]);
+    return {
+        {c1, q[0] * -s1, 0}, //
+        {s1, q[0] * +c1, 0}, //
+        {0, 0, 1}};
+}
+
+template <std::floating_point Float>
+inline Array<Float, 3, 3> encode_jacobian(const Array<Float, 3>& x) noexcept {
+    Float r1 = std::hypot(x[0], x[1]);
+    Float r2 = r1 * r1;
+    return {
+        {+x[0] / r1, +x[1] / r1, 0}, //
+        {-x[1] / r2, +x[0] / r2, 0}, //
+        {0, 0, 1}};
+}
+
+} // namespace CylCoords
+
+/// Convert to and from spherical coordinates.
+///
+/// - \f$ \mathbf{x} = (x, y, z) \f$
+/// - \f$ \mathbf{q} = (r, \theta, \phi) \f$
+///
+namespace SphCoords {
+
+template <std::floating_point Float>
+inline Array<Float, 3> decode(const Array<Float, 3>& q) noexcept {
+    auto [s1, c1] = sincos(q[1]);
+    auto [s2, c2] = sincos(q[2]);
+    return {
+        q[0] * s1 * c2, //
+        q[0] * s1 * s2, //
+        q[0] * c1};
+}
+
+template <std::floating_point Float>
+inline Array<Float, 3> encode(const Array<Float, 3>& x) noexcept {
+    Float r = std::hypot(x[0], x[1]);
+    return {
+        std::hypot(r, x[2]), //
+        std::atan2(r, x[2]), //
+        std::atan2(x[1], x[0])};
+}
+
+template <std::floating_point Float>
+inline Array<Float, 3, 3> decode_jacobian(const Array<Float, 3>& q) noexcept {
+    auto [s1, c1] = sincos(q[1]);
+    auto [s2, c2] = sincos(q[2]);
+    return {
+        {s1 * c2, +q[0] * c1 * c2, -q[0] * s1 * s2},
+        {s1 * s2, +q[0] * c1 * s2, +q[0] * s1 * c2},
+        {c1, -q[0] * s1, 0}};
+}
+
+template <std::floating_point Float>
+inline Array<Float, 3, 3> encode_jacobian(const Array<Float, 3>& x) noexcept {
+    if constexpr (std::same_as<Float, float>)
+        return encode_jacobian<double>(x);
+    else
+        return inverse(decode_jacobian(encode(x)));
+}
+
+} // namespace SphCoords
 
 } // namespace pre
 
