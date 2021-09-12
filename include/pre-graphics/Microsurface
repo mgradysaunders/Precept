@@ -40,11 +40,11 @@ namespace pre {
 
 namespace microsurface {
 
-constexpr double pi = pre::numeric_constants<double>::M_pi();
+constexpr double pi = pre::M_pi<double>;
 
-constexpr double inv_pi = pre::numeric_constants<double>::M_1_pi();
+constexpr double inv_pi = pre::M_1_pi<double>;
 
-constexpr double inv_sqrtpi = pre::numeric_constants<double>::M_2_sqrtpi() / 2;
+constexpr double inv_sqrtpi = pre::M_1_sqrtpi<double>;
 
 class Height {
   public:

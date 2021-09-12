@@ -82,35 +82,6 @@ constexpr Arith nthpow(Arith x, int n) noexcept {
     }
 }
 
-#if 0
-/// Chain-assign variables.
-///
-/// \note
-/// This is meant to reduce chained assignment expressions, such
-/// that `chain_assign(a, b, c, d)` is the same as `a = b`, then `b = c`,
-/// then `c = d`.
-///
-template <typename T, typename U, typename... V>
-constexpr void chain_assign(T& a, U&& b, V&&... c) noexcept {
-    a = std::move(b);
-    if constexpr (sizeof...(V) > 0)
-        chain_assign(b, std::forward<V>(c)...);
-}
-
-/// Cycle-assign variables.
-///
-/// \note
-/// This is meant to reduce cyclical assignment expressions, such
-/// that `cycle_assign(a, b, c)` is the same as `tmp = a`, `a = b`,
-/// `b = c`, `c = tmp`.
-///
-template <typename T, typename U, typename... V>
-constexpr void cycle_assign(T& a, U& b, V&... c) noexcept {
-    T t = std::move(a);
-    chain_assign(a, b, c..., t);
-}
-#endif
-
 /** \} */
 
 /// \name Integer helpers
@@ -131,21 +102,14 @@ constexpr Int repeat(Int k, Int n) noexcept {
         return k % n;
     }
     else {
-        if (n < Int(0)) {
+        if (n < Int(0))
             return -repeat(-k, -n);
-        }
-        else {
-            if (k >= Int(0)) {
-                return k % n;
-            }
-            else {
-                k = n + k % n;
-                if (k == n) {
-                    k = Int(0);
-                }
-                return k;
-            }
-        }
+        if (k >= Int(0))
+            return k % n;
+        k = n + k % n;
+        if (k == n)
+            k = Int(0);
+        return k;
     }
 }
 
@@ -515,7 +479,8 @@ inline Float fmirror(
 template <std::floating_point Float>
 inline Float float_incr(Float x) noexcept {
     if constexpr (
-        std::same_as<Float, float> and std::numeric_limits<float>::is_iec559) {
+        std::same_as<Float, float> and //
+        std::numeric_limits<float>::is_iec559) {
         std::uint32_t u = bit_cast<std::uint32_t>(x);
         if (u != (0x7f8UL << 20)) { // Not +Inf?
             if (u == (1UL << 31))   // Ignore -0.0.
@@ -549,7 +514,8 @@ inline Float float_incr(Float x) noexcept {
 template <std::floating_point Float>
 inline Float float_decr(Float x) noexcept {
     if constexpr (
-        std::same_as<Float, float> and std::numeric_limits<float>::is_iec559) {
+        std::same_as<Float, float> and //
+        std::numeric_limits<float>::is_iec559) {
         std::uint32_t u = bit_cast<std::uint32_t>(x);
         if (u != (0xff8UL << 20)) { // Not -Inf?
             if (u == 0)             // Ignore +0.0.
@@ -579,6 +545,12 @@ inline Float float_decr(Float x) noexcept {
         return std::nextafter(x, -Inf<Float>);
 }
 
+/// Same signbit?
+template <std::floating_point Float>
+inline bool same_signbit(Float a, Float b) noexcept {
+    return std::signbit(a) == std::signbit(b);
+}
+
 /// Is relatively tiny? (a much less than b)
 template <std::floating_point Float>
 inline bool is_tiny(Float a, Float b) noexcept {
@@ -594,23 +566,82 @@ inline bool is_huge(Float a, Float b) noexcept {
     return is_tiny(b, a);
 }
 
-/// Same signbit?
+/// Quadratic roots.
 template <std::floating_point Float>
-inline bool same_signbit(Float a, Float b) noexcept {
-    return std::signbit(a) == std::signbit(b);
+inline bool quadratic(
+    Float a, Float b, Float c, Float& x0, Float& x1) noexcept {
+    if (is_tiny(a, b)) {
+        x0 = x1 = -c / b;
+        return std::isfinite(x0);
+    }
+    else {
+        b /= a;
+        c /= a;
+        if (not std::isfinite(b) or //
+            not std::isfinite(c))
+            return false;
+        Float d = b * b - 4 * c;
+        if (not std::isfinite(d))
+            d = b * (b - 4 * (c / b)); // Try again
+        if (not std::isfinite(d) or d < 0)
+            return false;
+        x0 = -Float(0.5) * (b + std::copysign(std::sqrt(d), b));
+        x1 = c / x0;
+        if (x0 > x1)
+            std::swap(x0, x1);
+        return true;
+    }
+}
+
+/// Polynomial value.
+template <
+    concepts::arithmetic_or_complex Coeff,
+    concepts::arithmetic_or_complex Coord>
+constexpr auto polyval(IteratorRange<const Coeff*> ps, Coord x) noexcept {
+    std::decay_t<decltype(Coeff() * Coord())> y = {};
+    for (Coeff p : ps)
+        y = y * x + p;
+    return y;
+}
+
+/// Rational polynomial value.
+template <
+    concepts::arithmetic_or_complex Coeff,
+    concepts::arithmetic_or_complex Coord>
+constexpr auto polyval(
+    IteratorRange<const Coeff*> ps,
+    IteratorRange<const Coeff*> qs,
+    Coord x) noexcept {
+    if constexpr (std::integral<Coord>)
+        return polyval(ps, qs, double(x));
+    else {
+        ASSERT(ps.size() == qs.size());
+        if (std::abs(x) <= 1)
+            return polyval(ps, x) / polyval(qs, x);
+        else {
+            int n = ps.size();
+            x = Coord(1) / x;
+            std::decay_t<decltype(Coeff() * Coord())> yp = {};
+            std::decay_t<decltype(Coeff() * Coord())> yq = {};
+            for (int k = n - 1; k >= 0; k--) {
+                yp = yp * x + ps[k];
+                yq = yq * x + qs[k];
+            }
+            return yp / yq;
+        }
+    }
 }
 
 /// Fast inverse square root.
 template <std::floating_point Float>
 [[gnu::always_inline]] inline Float fast_inv_sqrt(Float x) noexcept {
     if constexpr (
-        std::same_as<Float, float> and pre::numeric_limits<float>::is_iec559) {
+        std::same_as<Float, float> and //
+        pre::numeric_limits<float>::is_iec559) {
         float y = x;
         float h = y * 0.5f;
-        std::uint32_t u = 0;
-        std::memcpy(&u, &y, 4);
-        u = 0x5f375a86 - (u >> 1);
-        std::memcpy(&y, &u, 4);
+        std::uint32_t u = 0x5f375a86 - (bit_cast<std::uint32_t>(y) >> 1);
+        y = bit_cast<float>(u);
         y = y * (1.5f - h * y * y);
         y = y * (1.5f - h * y * y);
         return y;
@@ -702,10 +733,9 @@ template <std::floating_point Float>
 inline Float sinpi(Float x) noexcept {
     int quo;
     Float rem = pre::remquo(x, Float(1), &quo);
-    Float res = pre::sin(pre::numeric_constants<Float>::M_pi() * rem);
-    if (unsigned(quo) & 1) {
+    Float res = pre::sin(M_pi<Float> * rem);
+    if (unsigned(quo) & 1)
         res = -res;
-    }
     return res;
 }
 
@@ -720,10 +750,9 @@ template <std::floating_point Float>
 inline Float cospi(Float x) noexcept {
     int quo;
     Float rem = pre::remquo(x, Float(1), &quo);
-    Float res = pre::cos(pre::numeric_constants<Float>::M_pi() * rem);
-    if (unsigned(quo) & 1) {
+    Float res = pre::cos(M_pi<Float> * rem);
+    if (unsigned(quo) & 1)
         res = -res;
-    }
     return res;
 }
 
@@ -796,8 +825,7 @@ template <std::floating_point Float>
 inline auto sincospi(Float x) noexcept {
     int quo;
     Float rem = pre::remquo(x, Float(1), &quo);
-    auto [sinx, cosx] =
-        pre::sincos(pre::numeric_constants<Float>::M_pi() * rem);
+    auto [sinx, cosx] = pre::sincos(M_pi<Float> * rem);
     if (unsigned(quo) & 1) {
         sinx = -sinx;
         cosx = -cosx;
@@ -808,58 +836,31 @@ inline auto sincospi(Float x) noexcept {
 /// Error function inverse.
 template <std::floating_point Float>
 inline Float erfinv(Float y) noexcept {
-    Float w = -pre::log((1 - y) * (1 + y));
+    Float w = -std::log((1 - y) * (1 + y));
     Float p;
     if (w < Float(5)) {
         w = w - Float(2.5);
-        p = pre::fma(w, Float(+2.81022636e-08), Float(+3.43273939e-7));
-        p = pre::fma(w, p, Float(-3.52338770e-6));
-        p = pre::fma(w, p, Float(-4.39150654e-6));
-        p = pre::fma(w, p, Float(+2.18580870e-4));
-        p = pre::fma(w, p, Float(-1.25372503e-3));
-        p = pre::fma(w, p, Float(-4.17768164e-3));
-        p = pre::fma(w, p, Float(+2.46640727e-1));
-        p = pre::fma(w, p, Float(+1.50140941));
+        p = std::fma(w, Float(+2.81022636e-08), Float(+3.43273939e-7));
+        p = std::fma(w, p, Float(-3.52338770e-6));
+        p = std::fma(w, p, Float(-4.39150654e-6));
+        p = std::fma(w, p, Float(+2.18580870e-4));
+        p = std::fma(w, p, Float(-1.25372503e-3));
+        p = std::fma(w, p, Float(-4.17768164e-3));
+        p = std::fma(w, p, Float(+2.46640727e-1));
+        p = std::fma(w, p, Float(+1.50140941));
     }
     else {
-        w = pre::sqrt(w) - 3;
-        p = pre::fma(w, Float(-2.00214257e-4), Float(+1.00950558e-4));
-        p = pre::fma(w, p, Float(+1.34934322e-3));
-        p = pre::fma(w, p, Float(-3.67342844e-3));
-        p = pre::fma(w, p, Float(+5.73950773e-3));
-        p = pre::fma(w, p, Float(-7.62246130e-3));
-        p = pre::fma(w, p, Float(+9.43887047e-3));
-        p = pre::fma(w, p, Float(+1.00167406));
-        p = pre::fma(w, p, Float(+2.83297682));
+        w = std::sqrt(w) - 3;
+        p = std::fma(w, Float(-2.00214257e-4), Float(+1.00950558e-4));
+        p = std::fma(w, p, Float(+1.34934322e-3));
+        p = std::fma(w, p, Float(-3.67342844e-3));
+        p = std::fma(w, p, Float(+5.73950773e-3));
+        p = std::fma(w, p, Float(-7.62246130e-3));
+        p = std::fma(w, p, Float(+9.43887047e-3));
+        p = std::fma(w, p, Float(+1.00167406));
+        p = std::fma(w, p, Float(+2.83297682));
     }
     return p * y;
-}
-
-/// Quadratic roots.
-template <std::floating_point Float>
-inline bool quadratic(
-    Float a, Float b, Float c, Float& x0, Float& x1) noexcept {
-    if (relatively_tiny(a, b)) {
-        x0 = x1 = -c / b;
-        return std::isfinite(x0);
-    }
-    else {
-        b /= a;
-        c /= a;
-        if (not std::isfinite(b) or //
-            not std::isfinite(c))
-            return false;
-        Float d = b * b - 4 * c;
-        if (not std::isfinite(d))
-            d = b * (b - 4 * (c / b)); // Try again
-        if (not std::isfinite(d) or d < 0)
-            return false;
-        x0 = -Float(0.5) * (b + std::copysign(std::sqrt(d), b));
-        x1 = c / x0;
-        if (x0 > x1)
-            std::swap(x0, x1);
-        return true;
-    }
 }
 
 /** \} */
