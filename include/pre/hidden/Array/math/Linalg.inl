@@ -17,14 +17,16 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
         void clear() noexcept {
             stack_.clear();
         }
-        template <typename T>
-        VecView<T> vector(ssize_t n) {
-            T* ptr = static_cast<T*>(stack_.allocate(sizeof(T) * n));
+        template <typename Value>
+        VecView<Value> vector(ssize_t n) {
+            Value* ptr =
+                static_cast<Value*>(stack_.allocate(sizeof(Value) * n));
             return {ptr, n};
         }
-        template <typename T>
-        MatView<T> matrix(ssize_t m, ssize_t n) {
-            T* ptr = static_cast<T*>(stack_.allocate(sizeof(T) * m * n));
+        template <typename Value>
+        MatView<Value> matrix(ssize_t m, ssize_t n) {
+            Value* ptr =
+                static_cast<Value*>(stack_.allocate(sizeof(Value) * m * n));
             const ssize_t sizes[] = {m, n};
             return {ptr, &sizes[0]};
         }
