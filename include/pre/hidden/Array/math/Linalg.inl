@@ -428,7 +428,7 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
         while (1) {
             // Find target indices.
             Float thresh =
-                pre::max(pre::abs(*x.diag(0))) * (Eps<Float> * Float(8));
+                pre::max(pre::abs(*x.diag(0))) * (Eps<Float> * Float(16));
             int s = 0;
             while (s < n - 1 && pre::abs(x.diag(1)[s]) < thresh)
                 s++;
@@ -469,7 +469,7 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
                     g = x.diag(2)[k];
                 }
             }
-            expect(itr++ < 4096, "Golub-Kahan convergence");
+            expect(itr++ < 4096 * 512, "Golub-Kahan convergence");
         }
         do_adjoint(u);
         do_adjoint(v);
