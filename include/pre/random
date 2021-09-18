@@ -41,22 +41,22 @@
 namespace pre {
 
 /// Generate canonical random value in \f$ [0, 1) \f$.
-template <std::floating_point T, typename G>
-inline T generate_canonical(G&& gen) {
+template <std::floating_point Float, std::uniform_random_bit_generator Gen>
+inline Float generate_canonical(Gen& gen) {
     long double r = static_cast<long double>(gen.max()) -
                     static_cast<long double>(gen.min()) + 1.0L;
     unsigned long long log2r = std::log2(r);
-    unsigned long long b = std::numeric_limits<T>::digits;
+    unsigned long long b = std::numeric_limits<Float>::digits;
     unsigned long long m = std::max(1ULL, (log2r + b - 1ULL) / log2r);
-    T s = T(0);
-    T t = T(1);
+    Float s = 0;
+    Float t = 1;
     while (m-- != 0) {
-        s += T(gen() - gen.min()) * t;
+        s += Float(gen() - gen.min()) * t;
         t *= r;
     }
     s /= t;
-    if (s >= T(1))
-        s = T(1) - std::numeric_limits<T>::epsilon();
+    if (s > 1 - Eps<Float>)
+        s = 1 - Eps<Float>;
     return s;
 }
 
@@ -73,11 +73,11 @@ inline T generate_canonical(G&& gen) {
 /// the bit depth of the unsigned integral type, then seeking by negative
 /// numbers works as expected.
 ///
-template <std::unsigned_integral T>
-constexpr T lcg_seek(T x, T a, T b, T n) {
+template <std::unsigned_integral Uint>
+constexpr Uint lcg_seek(Uint x, Uint a, Uint b, Uint n) {
     // Fast power by squaring.
-    T an = 1;
-    T bn = 0;
+    Uint an = 1;
+    Uint bn = 0;
     while (n > 0) {
         if (n & 1) {
             an *= a;
@@ -105,14 +105,14 @@ constexpr T lcg_seek(T x, T a, T b, T n) {
 /// the generator has a full period of \f$ 2^{m} \f$ where \f$ m \f$ is
 /// the bit depth of the unsigned integral type.
 ///
-template <std::unsigned_integral T>
-constexpr T lcg_distance(T x, T a, T b, T xn) {
+template <std::unsigned_integral Uint>
+constexpr Uint lcg_distance(Uint x, Uint a, Uint b, Uint xn) {
     // Ensure full period.
     if (!((a & 3) == 1) || !((b & 1) == 1))
         throw std::invalid_argument(__func__);
 
-    T p = 1;
-    T r = 0;
+    Uint p = 1;
+    Uint r = 0;
     while (x != xn) {
         if ((x & p) != (xn & p)) {
             x *= a;
@@ -137,16 +137,16 @@ constexpr T lcg_distance(T x, T a, T b, T xn) {
 /// [2]: https://pcg-random.org
 ///
 template <
-        std::unsigned_integral Result,
-        std::unsigned_integral State,
-        State Multiplier,
-        State DefaultIncrement>
+    std::unsigned_integral Result,
+    std::unsigned_integral State,
+    State Multiplier,
+    State DefaultIncrement>
 class PcgXshrrEngine {
   public:
     // Sanity check.
     static_assert(
-            sizeof(Result) <= sizeof(State) && //
-            (Multiplier & 3) == 1 && (DefaultIncrement & 1) == 1);
+        sizeof(Result) <= sizeof(State) && //
+        (Multiplier & 3) == 1 && (DefaultIncrement & 1) == 1);
 
     using result_type = Result;
 
@@ -233,7 +233,7 @@ class PcgXshrrEngine {
         constexpr size_t spare_bits = state_bits - result_bits;
         constexpr size_t target_op_bits = first1(result_bits);
         constexpr size_t op_bits =
-                spare_bits < target_op_bits ? spare_bits : target_op_bits;
+            spare_bits < target_op_bits ? spare_bits : target_op_bits;
         constexpr size_t amplifier = target_op_bits - op_bits;
         constexpr size_t mask = (1 << op_bits) - 1;
         constexpr size_t top_spare = op_bits;
@@ -267,30 +267,27 @@ class PcgXshrrEngine {
     /// Hash arbitrary data.
     static constexpr Result hash(const void* data, size_t size) {
         return hash(
-                static_cast<const std::byte*>(data),
-                static_cast<const std::byte*>(data) + size);
+            static_cast<const std::byte*>(data),
+            static_cast<const std::byte*>(data) + size);
     }
 };
 
 using Pcg8 = PcgXshrrEngine<std::uint8_t, std::uint16_t, 12829U, 47989U>;
 
-using Pcg16 = PcgXshrrEngine<
-        std::uint16_t,
-        std::uint32_t,
-        747796405UL,
-        2891336453UL>;
+using Pcg16 =
+    PcgXshrrEngine<std::uint16_t, std::uint32_t, 747796405UL, 2891336453UL>;
 
 using Pcg32 = PcgXshrrEngine<
-        std::uint32_t,
-        std::uint64_t,
-        6364136223846793005ULL,
-        1442695040888963407ULL>;
+    std::uint32_t,
+    std::uint64_t,
+    6364136223846793005ULL,
+    1442695040888963407ULL>;
 
 using Pcg64 = PcgXshrrEngine<
-        std::uint64_t,
-        std::uint64_t,
-        6364136223846793005ULL,
-        1442695040888963407ULL>;
+    std::uint64_t,
+    std::uint64_t,
+    6364136223846793005ULL,
+    1442695040888963407ULL>;
 
 template <std::floating_point Float>
 struct UniformDistribution {
@@ -342,8 +339,8 @@ struct NormalDistribution {
     }
     Float cdf(Float x) const noexcept {
         Float f = std::fma(
-                Float(0.5), std::erf(Float(M_SQRT1_2) * (x - mu) / sigma),
-                Float(0.5));
+            Float(0.5), std::erf(Float(M_SQRT1_2) * (x - mu) / sigma),
+            Float(0.5));
         if (std::isfinite(f)) {
             f = std::fmax(f, Float(0));
             f = std::fmin(f, Float(1));

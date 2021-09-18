@@ -1,0 +1,203 @@
+/*-*- C++ -*-*/
+/* Copyright (c) 2018-21 M. Grady Saunders
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   1. Redistributions of source code must retain the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *
+ *   2. Redistributions in binary form must reproduce the above
+ *      copyright notice, this list of conditions and the following
+ *      disclaimer in the documentation and/or other materials
+ *      provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/*-*-*-*-*-*-*/
+#pragma once
+#ifndef PRE_GRAPHICS_MONTE_CARLO
+#define PRE_GRAPHICS_MONTE_CARLO
+
+#include <pre/Array>
+#include <pre/math>
+#include <pre/random>
+
+namespace pre {
+
+namespace MonteCarlo {
+
+template <std::floating_point Float = double>
+struct UniformCone {
+    constexpr UniformCone() noexcept = default;
+    constexpr UniformCone(Float zm) noexcept : zmin(zm) {
+    }
+    Float zmin = 0;
+    Float pdf() noexcept {
+        return M_1_pi<Float> / 2 / (1 - zmin);
+    }
+    Vec3<Float> sample(Vec2<Float> u) noexcept {
+        Float z = lerp(u[0], zmin, Float(1));
+        Float cos_theta = clamp_abs(z, Float(1));
+        Float sin_theta = std::sqrt(1 - z * z);
+        Float phi = 2 * M_pi<Float> * u[1];
+        return {
+            sin_theta * std::cos(phi), //
+            sin_theta * std::sin(phi), //
+            cos_theta};
+    }
+};
+
+template <std::floating_point Float = double>
+struct UniformSphere {
+    static Float pdf() noexcept {
+        return M_1_pi<Float> / 4;
+    }
+    static Vec3<Float> sample(Vec2<Float> u) noexcept {
+        return UniformCone<Float>(-1).sample(u);
+    }
+};
+
+template <std::floating_point Float = double>
+struct UniformHemisphere {
+    static Float pdf() noexcept {
+        return M_1_pi<Float> / 2;
+    }
+    static Vec3<Float> sample(Vec2<Float> u) noexcept {
+        return UniformCone<Float>(0).sample(u);
+    }
+};
+
+template <std::floating_point Float>
+struct UniformDisk {
+    static Float pdf() noexcept {
+        return M_1_pi<Float>;
+    }
+    static Vec2<Float> sample(Vec2<Float> u) noexcept {
+        u = 2 * u - 1;
+        if ((u == 0).all())
+            return {};
+        Float rad = 0;
+        Float phi = 0;
+        if (std::abs(u[0]) > std::abs(u[1]))
+            rad = u[0], phi = M_pi_4<Float> * u[1] / u[0];
+        else
+            rad = u[1], phi = M_pi_2<Float> * (1 - u[0] / (2 * u[1]));
+        return {
+            rad * std::cos(phi), //
+            rad * std::sin(phi)};
+    }
+};
+
+template <std::floating_point Float = double>
+struct CosineHemisphere {
+    static Float pdf(Vec3<Float> w) noexcept {
+        return M_1_pi<Float> * std::fmax(Float(0), w[2]);
+    }
+    static Float pdf(Float z) noexcept {
+        return M_1_pi<Float> * std::fmax(Float(0), z);
+    }
+    static Vec3<Float> sample(Vec2<Float> u) noexcept {
+        Vec2<Float> p = UniformDisk<Float>::sample(u);
+        Vec3<Float> w = {p[0], p[1], std::sqrt(std::fmax(1 - dot(p, p), 0))};
+        return w;
+    }
+};
+
+template <std::floating_point Float, size_t Rank = 1>
+struct SampleSet
+    : ArrayLike<
+          SampleSet<Float, Rank>,
+          std::conditional_t<Rank == 1, Float, Array<Float, Rank>>> {
+    using Sample = std::conditional_t<Rank == 1, Float, Array<Float, Rank>>;
+    using Samples = std::vector<Sample>;
+    Samples samples;
+
+    SampleSet() = default;
+    template <std::uniform_random_bit_generator Gen>
+    SampleSet(Gen& gen, size_t num) : samples(num) {
+        for (Sample& sample : samples)
+            if constexpr (Rank == 1)
+                sample = generate_canonical<Float>(gen);
+            else
+                sample = Sample(gen, generate_canonical<Float, Gen>);
+    }
+    size_t size() const noexcept {
+        return samples.size();
+    }
+    Sample* begin() noexcept {
+        return samples.data();
+    }
+    Sample* end() noexcept {
+        return samples.data() + samples.size();
+    }
+    const Sample* begin() const noexcept {
+        return samples.data();
+    }
+    const Sample* end() const noexcept {
+        return samples.data() + samples.size();
+    }
+
+  public:
+    template <std::uniform_random_bit_generator Gen>
+    static SampleSet latin_hypercube(Gen& gen, size_t num) {
+        SampleSet sample_set(gen, num);
+        Sample* sample = sample_set.begin();
+        for (size_t ind = 0; ind < num; ind++) {
+            *sample += ind;
+            *sample /= num;
+            sample++;
+        }
+        if constexpr (Rank == 1)
+            std::shuffle(
+                sample_set.samples.begin(), //
+                sample_set.samples.end(), gen);
+        else
+            for (size_t k = 0; k < Rank; k++) {
+                VecView<Float> component_view(&sample_set[0][k], num, Rank);
+                std::shuffle(
+                    component_view.begin(), //
+                    component_view.end(), gen);
+            }
+        return sample_set;
+    }
+    template <std::uniform_random_bit_generator Gen>
+    static SampleSet stratify(Gen& gen, ArrayIndex<Rank> num) {
+        SampleSet sample_set(gen, num.prod());
+        Sample* sample = sample_set.begin();
+        for (ArrayIndex<Rank> ind : ArrayRange(num)) {
+            if constexpr (Rank == 1) {
+                *sample += ind[0];
+                *sample /= num[0];
+            }
+            else
+                for (size_t k = 0; k < Rank; k++) {
+                    (*sample)[k] += ind[k];
+                    (*sample)[k] /= num[k];
+                }
+            sample++;
+        }
+        std::shuffle(
+            sample_set.samples.begin(), //
+            sample_set.samples.end(), gen);
+        return sample_set;
+    }
+};
+
+} // namespace MonteCarlo
+
+} // namespace pre
+
+#endif // #ifndef PRE_GRAPHICS_MONTE_CARLO

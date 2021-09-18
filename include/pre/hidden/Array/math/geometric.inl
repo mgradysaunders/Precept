@@ -310,51 +310,7 @@ constexpr Array<Int, N, N> permutation_matrix(
     return res;
 }
 
-template <size_t N, std::floating_point Float>
-constexpr Array<Float, N> linspace(Float a, Float b) noexcept {
-    Array<Float, N> arr;
-    for (size_t k = 0; k < N; k++)
-        arr[k] = lerp(k / Float(N - 1), a, b);
-    return arr;
-    static_assert(N > 1);
-}
-
-/// Initializers for 2-dimensional floating point arrays.
-///
-/// \note
-/// To access these initializers, use `pre::Vec2<Float>::`.
-///
-template <std::floating_point Float>
-struct Array_initializers<Array<Float, 2>> {
-    /// Uniform disk probability density function.
-    static constexpr Float uniform_disk_pdf() noexcept {
-        return M_1_pi<Float>;
-    }
-
-    /// Uniform disk probability density function sampling routine.
-    static Vec2<Float> uniform_disk_pdf_sample(Vec2<Float> u) noexcept {
-        u = 2 * u - 1;
-        if ((u == 0).all()) {
-            return u;
-        }
-        else {
-            Float r;
-            Float theta;
-            if (pre::abs(u[0]) > pre::abs(u[1])) {
-                r = u[0];
-                theta = M_pi_4<Float> * (u[1] / u[0]);
-            }
-            else {
-                r = u[1];
-                theta = M_pi_4<Float> * (u[0] / u[1]);
-                theta = M_pi_2<Float> - theta;
-            }
-            return {r * pre::cos(theta), r * pre::sin(theta)};
-        }
-    }
-};
-
-// TODO Move this
+#if 0
 /// Initializers for 3-dimensional floating point arrays.
 ///
 /// \note
@@ -362,57 +318,6 @@ struct Array_initializers<Array<Float, 2>> {
 ///
 template <std::floating_point Float>
 struct Array_initializers<Array<Float, 3>> {
-
-    /// Form spherical direction from z-component and azimuth angle.
-    static Vec3<Float> sphericalz(Float z, Float phi) noexcept {
-        Float cos_theta = clamp_abs(z, +1);
-        Float sin_theta = pre::sqrt(1 - z * z);
-        auto [sin_phi, cos_phi] = sincos(phi);
-        return {sin_theta * cos_phi, sin_theta * sin_phi, cos_theta};
-    }
-
-    /// Uniform hemisphere probability density function.
-    static constexpr Float uniform_hemisphere_pdf() noexcept {
-        return M_1_pi<Float> / 2;
-    }
-
-    /// Uniform hemisphere probability density function sampling routine.
-    static Vec3<Float> uniform_hemisphere_pdf_sample(Vec2<Float> u) noexcept {
-        return sphericalz(u[0], 2 * M_pi<Float> * u[1]);
-    }
-
-    /// Uniform sphere probability density function.
-    static constexpr Float uniform_sphere_pdf() noexcept {
-        return M_1_pi<Float> / 4;
-    }
-
-    /// Uniform sphere probability density function sampling routine.
-    static Vec3<Float> uniform_sphere_pdf_sample(Vec2<Float> u) noexcept {
-        return sphericalz(2 * u[0] - 1, 2 * M_pi<Float> * u[1]);
-    }
-
-    /// Cosine hemisphere probability density function.
-    static constexpr Float cosine_hemisphere_pdf(Float z) noexcept {
-        return M_1_pi<Float> * pre::max(z, 0);
-    }
-
-    /// Cosine hemisphere probability density function sampling routine.
-    static Vec3<Float> cosine_hemisphere_pdf_sample(Vec2<Float> u) noexcept {
-        Vec2<Float> p = Vec2<Float>::uniform_disk_pdf_sample(u);
-        Vec3<Float> w = {p[0], p[1], pre::sqrt(1 - pre::min(length2(p), 1))};
-        return w;
-    }
-
-    /// Uniform cone probability density function.
-    static constexpr Float uniform_cone_pdf(Float zmax) noexcept {
-        return (M_1_pi<Float> / 2) / (1 - zmax);
-    }
-
-    /// Uniform cone probability density function sampling routine.
-    static Vec3<Float> uniform_cone_pdf_sample(
-        Float zmax, Vec2<Float> u) noexcept {
-        return sphericalz((1 - u[0]) + u[0] * zmax, 2 * M_pi<Float> * u[1]);
-    }
 
     /// Henyey-Greenstein phase probability density function.
     static Float hg_phase_pdf(Float g, Float z) noexcept {
@@ -440,6 +345,7 @@ struct Array_initializers<Array<Float, 3>> {
         }
     }
 };
+#endif
 
 /// Initializers for 2x2-dimensional floating point arrays.
 ///
