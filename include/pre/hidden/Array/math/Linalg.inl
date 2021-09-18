@@ -35,7 +35,7 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
         HeapStack<Alloc> stack_;
     };
 
-    Cache cache_;
+    Cache cache;
 
   private:
     static void expect(bool cond, const char* what) {
@@ -121,8 +121,8 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
         case 2: return std::hypot(std::abs(v[0]), std::abs(v[1]));
         default: break;
         }
-        auto push = cache_.scoped_push();
-        auto absv = cache_.template vector<Float>(n);
+        auto push = cache.scoped_push();
+        auto absv = cache.template vector<Float>(n);
         absv = pre::abs(*v);
         auto absv_max = *std::max_element(absv.begin(), absv.end());
         if (absv_max == 0)
@@ -305,8 +305,8 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
         ASSERT(!p || a.size() == p.size());
         int m = b.rows();
         int n = b.cols();
-        auto push = cache_.scoped_push();
-        auto y = cache_.template vector<Field>(m);
+        auto push = cache.scoped_push();
+        auto y = cache.template vector<Field>(m);
         for (int j = 0; j < n; j++) {
             // Solve R*y = b.
             for (int i = 0; i < m; i++) {
@@ -368,7 +368,7 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
     VecView<Field> householderl00(MatView<Field> a) {
         auto m = SliceInt(a.rows());
         auto n = SliceInt(a.cols());
-        auto w = cache_.template vector<Field>(m);
+        auto w = cache.template vector<Field>(m);
         auto c = a(0 | m, 0);
         w = *c;
         c[0] = -norm2(w) * sign(w[0]);
@@ -385,7 +385,7 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
         auto n = SliceInt(x.cols());
         if (s >= 0 && s < m && //
             t >= 0 && t < n) {
-            auto push = cache_.scoped_push();
+            auto push = cache.scoped_push();
             auto w = householderl00(x(s | m, t | n));
             if (!y.empty())
                 householderl_reflection(w, y(s | m, 0 | m)); // Accumulate
