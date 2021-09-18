@@ -187,7 +187,7 @@ Vec3<double> LambertianMicrosurface::phase_sample(
                           ? +Dwo_sample(u0, u1, +wo)
                           : -Dwo_sample(u0, u1, -wo);
     Vec3<double> wi = //
-        MonteCarlo::CosineHemisphere<double>::sample(
+        monte_carlo::CosineHemisphere<double>::sample(
             {generate_canonical<float>(random),
              generate_canonical<float>(random)});
     if (generate_canonical<float>(random) < r0 / (r0 + t0))

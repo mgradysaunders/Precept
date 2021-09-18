@@ -140,7 +140,7 @@ struct RayTest<Quadric<Float, Dim>> {
 /// - \f$ \mathbf{x} = (x, y, z) \f$
 /// - \f$ \mathbf{q} = (\rho, \phi, z) \f$
 ///
-namespace CylCoords {
+namespace cylinder_coords {
 
 template <std::floating_point Float>
 inline Array<Float, 3> decode(const Array<Float, 3>& q) noexcept {
@@ -174,14 +174,14 @@ inline Array<Float, 3, 3> encode_jacobian(const Array<Float, 3>& x) noexcept {
         {0, 0, 1}};
 }
 
-} // namespace CylCoords
+} // namespace cylinder_coords
 
 /// Convert to and from spherical coordinates.
 ///
 /// - \f$ \mathbf{x} = (x, y, z) \f$
 /// - \f$ \mathbf{q} = (r, \theta, \phi) \f$
 ///
-namespace SphCoords {
+namespace sphere_coords {
 
 template <std::floating_point Float>
 inline Array<Float, 3> decode(const Array<Float, 3>& q) noexcept {
@@ -220,7 +220,7 @@ inline Array<Float, 3, 3> encode_jacobian(const Array<Float, 3>& x) noexcept {
         return inverse(decode_jacobian(encode(x)));
 }
 
-} // namespace SphCoords
+} // namespace sphere_coords
 
 } // namespace pre
 

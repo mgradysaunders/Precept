@@ -37,7 +37,7 @@
 
 namespace pre {
 
-namespace MonteCarlo {
+namespace monte_carlo {
 
 template <std::floating_point Float = double>
 struct UniformCone {
@@ -196,7 +196,7 @@ struct SampleSet
     }
 };
 
-} // namespace MonteCarlo
+} // namespace monte_carlo
 
 } // namespace pre
 
