@@ -313,6 +313,10 @@ struct UniformDistribution {
     Float cdf_inv(Float u) const noexcept {
         return (1 - u) * a + u * b;
     }
+    template <typename G>
+    Float operator()(G&& gen) const noexcept {
+        return cdf_inv(generate_canonical<Float>(std::forward<G>(gen)));
+    }
 
   public:
     Float a = 0;
@@ -352,6 +356,10 @@ struct NormalDistribution {
         u = std::fmax(u, Float(0));
         u = std::fmin(u, Float(1));
         return std::fma(Float(M_SQRT2) * sigma, erfinv(2 * u - 1), mu);
+    }
+    template <typename G>
+    Float operator()(G&& gen) const noexcept {
+        return cdf_inv(generate_canonical<Float>(std::forward<G>(gen)));
     }
 
   public:
