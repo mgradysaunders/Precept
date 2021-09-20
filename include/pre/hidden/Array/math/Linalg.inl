@@ -430,7 +430,7 @@ requires concepts::floating_point_or_complex<Field> struct Linalg {
         while (1) {
             // Find target indices.
             Float thresh =
-                pre::max(pre::abs(*x.diag(0))) * (Eps<Float> * Float(16));
+                pre::max(pre::abs(*x.diag(0))) * (Eps<Float> * 512);
             int s = 0;
             while (s < n - 1 && pre::abs(x.diag(1)[s]) < thresh)
                 s++;
