@@ -218,15 +218,12 @@ constexpr Array<Arith, N, M> adjoint(const Array<Arith, M, N>& arr) noexcept {
 /// Matrix determinant.
 template <concepts::arithmetic_or_complex Arith, size_t N>
 inline auto det(const Array<Arith, N, N>& arr) noexcept {
-    if constexpr (N == 1) {
+    if constexpr (N == 1)
         return arr(0, 0);
-    }
-    else if constexpr (N == 2) {
+    else if constexpr (N == 2) 
         return cross(arr[0], arr[1]);
-    }
-    else if constexpr (N == 3) {
+    else if constexpr (N == 3) 
         return cross(arr[0], arr[1], arr[2]);
-    }
     else {
         using Float = to_floating_point_t<Arith>;
         using Field = decltype(Arith() * Float());

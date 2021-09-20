@@ -118,7 +118,7 @@ struct ArrayIndex : ArrayLike<ArrayIndex<Rank>, ssize_t> {
 
     template <size_t TailRank>
     constexpr ArrayIndex<TailRank> tail() const noexcept {
-        return IteratorRange(begin() + TailRank, end());
+        return IteratorRange(begin() + Rank - TailRank, end());
         static_assert(TailRank <= Rank);
     }
 
@@ -151,7 +151,42 @@ struct ArrayIndex : ArrayLike<ArrayIndex<Rank>, ssize_t> {
                 *itr2++ = values[dim];
         }
         return std::make_pair(kept, omitted);
-        static_assert(Rank > OmitRank);
+        static_assert(Rank >= OmitRank);
+    }
+
+    /// Levi-Civita permutation sign.
+    constexpr int levi_civita() const noexcept {
+        if constexpr (Rank == 0)
+            return 0;
+        else if constexpr (Rank == 1)
+            return values[0] == 0;
+        else if constexpr (Rank == 2) {
+            if (*this == ArrayIndex{0, 1})
+                return +1;
+            if (*this == ArrayIndex{1, 0})
+                return -1;
+            return 0;
+        }
+        else {
+            int visit[Rank] = {};
+            for (ssize_t value : values)
+                if (0 <= value and value < ssize_t(Rank))
+                    visit[value]++;
+            for (ssize_t value : values)
+                if (visit[value] != 1)
+                    return 0;
+            std::fill(visit, visit + Rank, 0);
+            int count = 0; // Count even cycles
+            for (size_t dim = 0; dim < Rank; dim++)
+                if (visit[dim] == 0) {
+                    ssize_t len = 0;
+                    ssize_t pos = dim;
+                    for (; visit[pos] == 0; pos = values[pos], len++)
+                        visit[pos] = 1;
+                    count += ((len & 1) == 0);
+                }
+            return (count & 1) ? -1 : +1;
+        }
     }
 
     constexpr auto operator<=>(const ArrayIndex& other) const noexcept {
@@ -176,11 +211,11 @@ struct ArrayIndex : ArrayLike<ArrayIndex<Rank>, ssize_t> {
     }
 
   public:
-    ssize_t values[Rank] = {};
+    ssize_t values[Rank > 1 ? Rank : 1] = {};
 };
 
-template <>
-struct ArrayIndex<0> {};
+// template <>
+// struct ArrayIndex<0> {};
 
 template <std::integral... Ints>
 ArrayIndex(Ints... ints) -> ArrayIndex<sizeof...(Ints)>;

@@ -101,7 +101,7 @@ template <
     size_t Rank0,
     size_t Rank1,
     size_t OmitRank>
-[[gnu::always_inline]] constexpr auto tensor_dot(
+[[gnu::always_inline]] constexpr auto dot(
     const LazyArray<Func0, Rank0>& arr0,
     const LazyArray<Func1, Rank1>& arr1,
     const ArrayIndex<OmitRank>& dims0,
@@ -166,6 +166,23 @@ template <typename Func>
         ArrayIndex{
             arr.sizes[1], //
             arr.sizes[0]});
+}
+
+/// Levi-Civita tensor.
+template <size_t Rank>
+[[gnu::always_inline]] constexpr auto levi_civita() noexcept {
+    ArrayIndex<Rank> sizes;
+    std::fill(sizes.begin(), sizes.end(), Rank);
+    return LazyArray(
+        [](auto ind) constexpr noexcept { return ind.levi_civita(); }, sizes);
+}
+
+/// Levi-Civita tensor.
+template <size_t Rank>
+[[gnu::always_inline]] constexpr auto levi_civita(
+    const ArrayIndex<Rank>& sizes) noexcept {
+    return LazyArray(
+        [](auto ind) constexpr noexcept { return ind.levi_civita(); }, sizes);
 }
 
 #if 0

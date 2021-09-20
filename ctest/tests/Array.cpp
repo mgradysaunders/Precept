@@ -1,3 +1,4 @@
+#include <iostream>
 #include "../doctest.h"
 #include <sstream>
 #include <pre/random>
@@ -63,30 +64,69 @@ TEST_CASE("Array") {
             pre::Array<int, 2, 4> rhs = {1, 2, 3, 4, 5, 6, 7, 8};
             CHECK((pre::dot(lhs, rhs) ==
                    pre::Array{
-                           1 * 1 + 2 * 5, //
-                           1 * 2 + 2 * 6, //
-                           1 * 3 + 2 * 7, //
-                           1 * 4 + 2 * 8})
-                          .all());
+                       1 * 1 + 2 * 5, //
+                       1 * 2 + 2 * 6, //
+                       1 * 3 + 2 * 7, //
+                       1 * 4 + 2 * 8})
+                      .all());
         }
         SUBCASE("Dot matrix with vector") {
             pre::Array<int, 3, 2> lhs = {1, 2, 3, 4, 5, 6};
             pre::Array<int, 2> rhs = {1, 2};
             CHECK((pre::dot(lhs, rhs) ==
                    pre::Array{
-                           1 * 1 + 2 * 2, //
-                           3 * 1 + 4 * 2, //
-                           5 * 1 + 6 * 2})
-                          .all());
+                       1 * 1 + 2 * 2, //
+                       3 * 1 + 4 * 2, //
+                       5 * 1 + 6 * 2})
+                      .all());
         }
         SUBCASE("Dot matrix with matrix") {
             pre::Array<int, 2, 2> lhs = {1, 2, 3, 4};
             pre::Array<int, 2, 3> rhs = {1, 2, 3, 4, 5, 6};
             CHECK((pre::dot(lhs, rhs) ==
                    pre::Array<int, 2, 3>{
-                           1 * 1 + 2 * 4, 1 * 2 + 2 * 5, 1 * 3 + 2 * 6, //
-                           3 * 1 + 4 * 4, 3 * 2 + 4 * 5, 3 * 3 + 4 * 6})
-                          .all());
+                       1 * 1 + 2 * 4, 1 * 2 + 2 * 5, 1 * 3 + 2 * 6, //
+                       3 * 1 + 4 * 4, 3 * 2 + 4 * 5, 3 * 3 + 4 * 6})
+                      .all());
+        }
+    }
+}
+
+TEST_CASE("ArrayIndex") {
+    SUBCASE("Swizzle") {
+        pre::ArrayIndex<3> ind = {3, 4, 5};
+        CHECK(ind.swizzle(2, 0, 1) == pre::ArrayIndex{5, 3, 4});
+        CHECK(ind.swizzle(2, 0, 1, 0) == pre::ArrayIndex{5, 3, 4, 3});
+    }
+    SUBCASE("Join and omit") {
+        pre::ArrayIndex<3> ind0 = {1, 3, 5};
+        pre::ArrayIndex<4> ind1 = {7, 9, 11, 13};
+        pre::ArrayIndex<7> joined = ind0.join(ind1);
+        CHECK(joined == pre::ArrayIndex{1, 3, 5, 7, 9, 11, 13});
+        CHECK(joined.head<3>() == ind0);
+        CHECK(joined.tail<4>() == ind1);
+        auto [kept, omitted] = joined.omit(pre::ArrayIndex{1, 2, 4});
+        CHECK(kept == pre::ArrayIndex{1, 7, 11, 13});
+        CHECK(omitted == pre::ArrayIndex{3, 5, 9});
+    }
+    SUBCASE("Levi-Civita sign") {
+        SUBCASE("Rank-2") {
+            CHECK(pre::ArrayIndex{0, 0}.levi_civita() == 0);
+            CHECK(pre::ArrayIndex{0, 1}.levi_civita() == +1);
+            CHECK(pre::ArrayIndex{1, 0}.levi_civita() == -1);
+            CHECK(pre::ArrayIndex{1, 1}.levi_civita() == 0);
+        }
+        SUBCASE("Rank-3") {
+            for (auto ijk : pre::ArrayRange{3, 3, 3})
+                if (ijk[0] == ijk[1] or //
+                    ijk[0] == ijk[2] or //
+                    ijk[1] == ijk[2])
+                    CHECK(ijk.levi_civita() == 0);
+                else
+                    CHECK(std::abs(ijk.levi_civita()) == 1);
+            // Out-of-range indices return zero.
+            CHECK(pre::ArrayIndex{3, 2, 1}.levi_civita() == 0);
+            CHECK(pre::ArrayIndex{1, 3, 5}.levi_civita() == 0);
         }
     }
 }
@@ -189,6 +229,38 @@ TEST_CASE("ArrayView") {
             CHECK(arr->transpose().rows() == 18);
             CHECK(arr->transpose().cols() == 12);
             CHECK(&arr->transpose()(8, 4) == &arr[4][8]);
+        }
+    }
+}
+
+TEST_CASE("LazyArray") {
+    pre::Pcg32 gen(getContextOptions()->rand_seed);
+    auto gen_range = [](auto& gen) { return int(gen(20)) - 10; };
+
+    SUBCASE("Tensor operations") {
+        SUBCASE("Dot product") {
+            pre::Array<int, 5> lhs(gen, gen_range);
+            pre::Array<int, 5> rhs(gen, gen_range);
+            int result = pre::trace(pre::outer(**lhs, **rhs));
+            CHECK(result == pre::dot(lhs, rhs));
+        }
+        SUBCASE("Cross product") {
+            pre::Array<int, 3> lhs(gen, gen_range);
+            pre::Array<int, 3> rhs(gen, gen_range);
+            pre::Array<int, 3> result = pre::dot(
+                pre::levi_civita<3>(), pre::outer(**lhs, **rhs), //
+                pre::ArrayIndex{0, 1}, pre::ArrayIndex{0, 1});
+            CHECK((result == pre::cross(lhs, rhs)).all());
+        }
+        SUBCASE("Determinant") {
+            pre::Array<int, 3, 3> matrix(gen, gen_range);
+            pre::ArrayView<int, 1> column0 = matrix(pre::Slice(), 0);
+            pre::ArrayView<int, 1> column1 = matrix(pre::Slice(), 1);
+            pre::ArrayView<int, 1> column2 = matrix(pre::Slice(), 2);
+            int result = pre::sum(
+                pre::levi_civita<3>() *
+                pre::outer(pre::outer(*column0, *column1), *column2));
+            CHECK(result == pre::det(matrix));
         }
     }
 }
