@@ -1,8 +1,8 @@
 #include "../doctest.h"
 #include <sstream>
-#include <pre/BoundBox>
-#include <pre/IdString>
 #include <pre/Serializer>
+#include <pre/IdString>
+#include <pre-graphics/Bound>
 
 static int Serial_ctor_calls = 0;
 static int Serial_dtor_calls = 0;
@@ -40,13 +40,13 @@ class SerialLeaf final : public Serial {
     }
 
     SerialLeaf() = default;
-    SerialLeaf(const pre::IdString& str_, const pre::BoundBox3<double>& box_)
+    SerialLeaf(const pre::IdString& str_, const pre::Bound3<double>& box_)
         : str(str_), box(box_) {
     }
 
   public:
     pre::IdString str;
-    pre::BoundBox3<double> box;
+    pre::Bound3<double> box;
 };
 
 TEST_CASE("Serializer") {
@@ -55,17 +55,17 @@ TEST_CASE("Serializer") {
         pre::RefPtr branch1(new SerialBranch());
         pre::RefPtr branch2(new SerialBranch());
         pre::RefPtr leaf1(new SerialLeaf(
-                "Leaf1", pre::BoundBox{
-                                 pre::Array{-1.0, -2.0, -3.0},
-                                 pre::Array{+1.0, +2.0, +3.0}}));
+            "Leaf1",
+            pre::Bound{
+                pre::Array{-1.0, -2.0, -3.0}, pre::Array{+1.0, +2.0, +3.0}}));
         pre::RefPtr leaf2(new SerialLeaf(
-                "Leaf2", pre::BoundBox{
-                                 pre::Array{-3.0, -2.0, -1.0},
-                                 pre::Array{+4.0, +5.0, +6.0}}));
+            "Leaf2",
+            pre::Bound{
+                pre::Array{-3.0, -2.0, -1.0}, pre::Array{+4.0, +5.0, +6.0}}));
         pre::RefPtr leaf3(new SerialLeaf(
-                "Leaf3", pre::BoundBox{
-                                 pre::Array{-7.0, -7.0, -5.0},
-                                 pre::Array{+1.0, +1.0, +1.0}}));
+            "Leaf3",
+            pre::Bound{
+                pre::Array{-7.0, -7.0, -5.0}, pre::Array{+1.0, +1.0, +1.0}}));
         branch1->serials["1"] = leaf1;
         branch1->serials["2"] = leaf2;
         branch2->serials["3"] = leaf3;
